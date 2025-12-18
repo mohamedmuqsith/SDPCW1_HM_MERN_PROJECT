@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
@@ -22,6 +23,11 @@ const getUser = async (req) => {
 router.post('/', async (req, res) => {
     try {
         const { userId, roomName, roomType, checkIn, checkOut, totalPrice } = req.body;
+
+        // Validate userId format to prevent CastError
+        if (userId && !mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ message: 'Invalid User ID format. Please use a real ID from login/register response.' });
+        }
 
         const booking = await Booking.create({
             user: userId,

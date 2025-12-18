@@ -12,6 +12,7 @@ const RoomManagement = () => {
         price: '',
         status: 'Available'
     });
+    const [imageFile, setImageFile] = useState(null);
 
     const fetchRooms = async () => {
         try {
@@ -40,10 +41,18 @@ const RoomManagement = () => {
 
             const method = editingRoom ? 'PUT' : 'POST';
 
+            const data = new FormData();
+            data.append('number', formData.number);
+            data.append('type', formData.type);
+            data.append('price', formData.price);
+            data.append('status', formData.status);
+            if (imageFile) {
+                data.append('image', imageFile);
+            }
+
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: data // No Content-Type header needed for FormData (browser sets it)
             });
 
             if (response.ok) {
@@ -84,6 +93,7 @@ const RoomManagement = () => {
                 price: '',
                 status: 'Available'
             });
+            setImageFile(null);
         }
         setIsModalOpen(true);
     };
@@ -197,6 +207,16 @@ const RoomManagement = () => {
                                     <option value="Maintenance">Maintenance</option>
                                     <option value="Cleaning">Cleaning</option>
                                 </select>
+
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Room Image</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="w-full border-slate-300 rounded-lg p-2 border"
+                                    onChange={e => setImageFile(e.target.files[0])}
+                                />
                             </div>
                             <div className="pt-4 flex justify-end gap-2">
                                 <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-700 hover:bg-slate-50 rounded-lg">Cancel</button>
@@ -204,9 +224,9 @@ const RoomManagement = () => {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div >
             )}
-        </div>
+        </div >
     );
 };
 

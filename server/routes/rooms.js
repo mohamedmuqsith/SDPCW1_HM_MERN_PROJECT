@@ -1,5 +1,6 @@
 import express from 'express';
 import Room from '../models/Room.js';
+import upload from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -30,14 +31,17 @@ router.get('/:id', async (req, res) => {
 
 // @route   POST /api/rooms
 // @desc    Add a new room (Admin)
-router.post('/', async (req, res) => {
+router.post('/', upload.single('image'), async (req, res) => {
     try {
-        const { number, type, price, status, description, image } = req.body;
+        const { number, type, price, status, description } = req.body;
 
         const roomExists = await Room.findOne({ number });
         if (roomExists) {
             return res.status(400).json({ message: 'Room number already exists' });
         }
+
+
+        const image = req.file ? `/uploads/rooms/${req.file.filename}` : req.body.image;
 
         const room = await Room.create({
             number,
@@ -57,9 +61,9 @@ router.post('/', async (req, res) => {
 
 // @route   PUT /api/rooms/:id
 // @desc    Update a room (Admin)
-router.put('/:id', async (req, res) => {
+router.put('/:id', upload.single('image'), async (req, res) => {
     try {
-        const { number, type, price, status, description, image } = req.body;
+        const { number, type, price, status, description } = req.body;
         const room = await Room.findById(req.params.id);
 
         if (!room) {
@@ -71,7 +75,11 @@ router.put('/:id', async (req, res) => {
         room.price = price || room.price;
         room.status = status || room.status;
         room.description = description || room.description;
-        room.image = image || room.image;
+        if (req.file) {
+            room.image = `/uploads/rooms/${req.file.filename}`;
+        } else {
+            room.image = req.body.image || room.image;
+        }
 
         const updatedRoom = await room.save();
         res.json(updatedRoom);

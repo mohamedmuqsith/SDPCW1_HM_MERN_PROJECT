@@ -6,7 +6,7 @@ const RoomCard = ({ room }) => {
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl transition-all duration-300 group">
             <div className="relative h-64 overflow-hidden">
                 <img
-                    src={room.image}
+                    src={room.image.startsWith('/uploads') ? `http://localhost:5000${room.image}` : room.image}
                     alt={room.name}
                     className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
                 />
