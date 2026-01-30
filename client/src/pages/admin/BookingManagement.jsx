@@ -133,7 +133,7 @@ const BookingManagement = () => {
                                         {booking.roomName} <span className="text-xs text-slate-400">({booking.roomType})</span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                        {new Date(booking.checkIn).toLocaleDateString()} - {new Date(booking.checkOut).toLocaleDateString()}
+                                        {new Date(booking.checkIn).toLocaleDateString('en-GB')} - {new Date(booking.checkOut).toLocaleDateString('en-GB')}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -202,6 +202,17 @@ const BookingManagement = () => {
                                     className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
                                     required
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Total Price ($)</label>
+                                <input
+                                    type="number"
+                                    value={editingBooking.totalPrice}
+                                    onChange={(e) => setEditingBooking({ ...editingBooking, totalPrice: e.target.value })}
+                                    className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                                    required
+                                />
+                                <p className="text-xs text-slate-500 mt-1">Update manually if you change dates.</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>

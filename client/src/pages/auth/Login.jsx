@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [emailError, setEmailError] = useState('');
     const [loading, setLoading] = useState(false);
     const { login, loginWithGoogle } = useAuth();
     const navigate = useNavigate();
@@ -23,8 +24,29 @@ const Login = () => {
         }
     };
 
+    const validateEmail = (email) => {
+        const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!regex.test(email)) {
+            setEmailError('Please enter a valid email address (e.g. user@example.com)');
+            return false;
+        }
+        setEmailError('');
+        return true;
+    };
+
+    const handleEmailChange = (e) => {
+        const val = e.target.value;
+        setEmail(val);
+        if (emailError) validateEmail(val);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!validateEmail(email)) {
+            return;
+        }
+
         setLoading(true);
         try {
             const userData = await login(email, password);
@@ -70,26 +92,40 @@ const Login = () => {
                 </div>
             </div>
 
-            <form className="space-y-6" onSubmit={handleSubmit}>
+            <form className="space-y-6" onSubmit={handleSubmit} noValidate>
                 <div>
                     <label htmlFor="email" className="block text-sm font-medium text-slate-700">
                         Email address
                     </label>
                     <div className="mt-1 relative rounded-md shadow-sm">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Mail className="h-5 w-5 text-slate-400" />
+                            <Mail className={`h-5 w-5 ${emailError ? 'text-red-500' : 'text-slate-400'}`} />
                         </div>
                         <input
                             id="email"
                             name="email"
                             type="email"
                             required
-                            className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-slate-300 rounded-lg py-2"
+                            className={`block w-full pl-10 sm:text-sm rounded-lg py-2 focus:ring-primary-500 focus:border-primary-500 ${emailError
+                                    ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
+                                    : 'border-slate-300'
+                                }`}
                             placeholder="you@example.com"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={handleEmailChange}
+                            onBlur={() => validateEmail(email)}
                         />
+                        {emailError && (
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <AlertCircle className="h-5 w-5 text-red-500" />
+                            </div>
+                        )}
                     </div>
+                    {emailError && (
+                        <p className="mt-2 text-sm text-red-600" id="email-error">
+                            {emailError}
+                        </p>
+                    )}
                 </div>
 
                 <div>

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ClipboardList, BedDouble, Bell, LogOut, User } from 'lucide-react';
+import { ClipboardList, BedDouble, Bell, LogOut, User, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const StaffSidebar = () => {
@@ -8,6 +8,7 @@ const StaffSidebar = () => {
 
     const links = [
         { name: 'My Tasks', path: '/staff', icon: <ClipboardList size={20} /> },
+        { name: 'Check-In / Out', path: '/staff/bookings', icon: <LogIn size={20} /> },
         { name: 'Room Status', path: '/staff/rooms', icon: <BedDouble size={20} /> },
         { name: 'Notifications', path: '/staff/notifications', icon: <Bell size={20} /> },
     ];
@@ -44,8 +45,8 @@ const StaffSidebar = () => {
                             key={link.name}
                             to={link.path}
                             className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                                    ? 'bg-secondary-600 text-white shadow-lg shadow-secondary-900/20'
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                ? 'bg-secondary-600 text-white shadow-lg shadow-secondary-900/20'
+                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                                 }`}
                         >
                             <div className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}>

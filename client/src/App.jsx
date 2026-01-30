@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Unauthorized from './pages/Unauthorized';
 import Services from './pages/Services';
 import Contact from './pages/Contact';
 import BookingPage from './pages/guest/BookingPage';
@@ -22,6 +23,11 @@ import Reports from './pages/admin/Reports';
 import ServiceManagement from './pages/admin/ServiceManagement';
 import StaffDashboard from './pages/staff/StaffDashboard';
 import StaffLayout from './components/admin/StaffLayout';
+import StaffLogin from './pages/auth/StaffLogin';
+import StaffRegister from './pages/auth/StaffRegister';
+import StaffRoomStatus from './pages/staff/StaffRoomStatus';
+import StaffBookings from './pages/staff/StaffBookings';
+import StaffNotifications from './pages/staff/StaffNotifications';
 
 // Placeholder Pages for Staff
 // Placeholder Pages for Staff (Removed)
@@ -45,6 +51,8 @@ function App() {
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/staff/login" element={<StaffLogin />} />
+            <Route path="/staff/register" element={<StaffRegister />} />
           </Route>
 
           {/* Guest Protected Routes */}
@@ -65,8 +73,9 @@ function App() {
             </PrivateRoute>
           }>
             <Route index element={<StaffDashboard />} />
-            <Route path="rooms" element={<div className="p-8">Room Status View (Coming Soon)</div>} />
-            <Route path="notifications" element={<div className="p-8">Notifications View (Coming Soon)</div>} />
+            <Route path="bookings" element={<StaffBookings />} />
+            <Route path="rooms" element={<StaffRoomStatus />} />
+            <Route path="notifications" element={<StaffNotifications />} />
           </Route>
 
           {/* Admin Protected Routes */}
@@ -84,6 +93,7 @@ function App() {
             <Route path="reports" element={<Reports />} />
           </Route>
 
+          <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>

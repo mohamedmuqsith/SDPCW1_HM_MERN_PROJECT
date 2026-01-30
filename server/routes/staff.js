@@ -1,5 +1,6 @@
 import express from 'express';
 import Staff from '../models/Staff.js';
+import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
 
 const router = express.Router();
@@ -37,14 +38,31 @@ router.post('/', async (req, res) => {
             status
         });
 
+        // AUTO-CREATE USER ACCOUNT FOR LOGIN
+        // Check if user account already exists (linked to this email)
+        const userExists = await User.findOne({ email });
+
+        if (!userExists) {
+            await User.create({
+                name,
+                email,
+                password: 'Staff123!', // Default password for new staff
+                role: 'staff'        // Explicitly set role to staff
+            });
+        } else {
+            // If user exists (e.g. was guest), upgrade role to staff
+            userExists.role = 'staff';
+            await userExists.save();
+        }
+
         await AuditLog.create({
-            user: 'Admin', // In real app, get from req.user
-            action: 'Staff Hired',
-            details: `Hired ${name} as ${position}`,
+            user: 'Admin',
+            action: 'Staff Hired & Account Created',
+            details: `Hired ${name} and created login account (Pass: Staff123!)`,
             ipAddress: req.ip || '127.0.0.1'
         });
 
-        res.status(201).json(staff);
+        res.status(201).json({ staff, message: 'Staff created and User account generated with password "Staff123!"' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error' });

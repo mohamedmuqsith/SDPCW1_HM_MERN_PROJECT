@@ -24,10 +24,30 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        // Determine role based on email pattern (for demo purposes, keeping logic similar to frontend mock)
-        let role = 'guest';
-        if (email.includes('admin') || email === 'admin35@gmail.com' || email === 'admin123@gmail.com') role = 'admin';
-        else if (email.includes('staff')) role = 'staff';
+        // Server-side password validation
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({
+                message: 'Password must be at least 8 characters long and include at least one uppercase letter, one number, and one special character.'
+            });
+        }
+
+        let role = 'guest'; // Default role
+
+        // Check specifically for the demo admin accounts or any email containing "admin"
+        if (
+            email === 'admin35@gmail.com' ||
+            email === 'admin123@gmail.com' ||
+            email === 'admin@admin.com' ||
+            email === 'admin123@admin.com' ||
+            email.toLowerCase().includes('admin')
+        ) {
+            role = 'admin';
+        }
+        // Logic to assign staff role if email contains "staff" (Simulation)
+        else if (email.toLowerCase().includes('staff')) {
+            role = 'staff';
+        }
 
         const user = await User.create({
             name,
@@ -42,15 +62,14 @@ router.post('/register', async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                avatar: user.avatar,
                 token: generateToken(user._id),
             });
         } else {
             res.status(400).json({ message: 'Invalid user data' });
         }
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
+        console.error(error); // Debugging
+        res.status(500).json({ message: 'Server Error' });
     }
 });
 

@@ -39,6 +39,12 @@ const RoomManagement = () => {
                 ? `http://localhost:5000/api/rooms/${editingRoom._id}`
                 : 'http://localhost:5000/api/rooms';
 
+            // Validate Price
+            if (parseFloat(formData.price) < 0) {
+                alert("Price cannot be negative.");
+                return;
+            }
+
             const method = editingRoom ? 'PUT' : 'POST';
 
             const data = new FormData();
