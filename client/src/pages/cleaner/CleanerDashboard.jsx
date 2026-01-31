@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Clock, CheckCircle2, Play, AlertTriangle, RefreshCw, Filter, Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Sparkles, Clock, CheckCircle2, Play, AlertTriangle, RefreshCw, Filter, Bell, LogOut } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import socket from '../../socket'; // Import socket
 
 const CleanerDashboard = () => {
+    const { logout, token, user } = useAuth();
+    const navigate = useNavigate();
     const [tasks, setTasks] = useState([]);
     const [stats, setStats] = useState({ new: 0, inProgress: 0, completed: 0, overdue: 0 });
     const [loading, setLoading] = useState(true);
@@ -10,6 +14,14 @@ const CleanerDashboard = () => {
     const [actionLoading, setActionLoading] = useState(null);
     const [newNotification, setNewNotification] = useState(null); // Local notification state
     const [showReportModal, setShowReportModal] = useState(false);
+    const [fetchError, setFetchError] = useState(null); // Track fetch errors
+
+    // Handle logout
+    const handleLogout = () => {
+        logout();
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
 
     // Helper: Calculate time ago
     const getTimeAgo = (dateString) => {
@@ -37,18 +49,35 @@ const CleanerDashboard = () => {
 
     const fetchTasks = async () => {
         try {
-            const token = localStorage.getItem('token');
+            setFetchError(null);
+            // Use token from AuthContext, fallback to localStorage
+            const authToken = token || localStorage.getItem('token');
+
+            if (!authToken) {
+                setFetchError('No authentication token. Please log in again.');
+                setLoading(false);
+                return;
+            }
+
+            console.log('Fetching cleaner tasks...', { userRole: user?.role });
+
             const statusParam = filter !== 'all' ? `?status=${filter}` : '';
             const res = await fetch(`http://localhost:5000/api/cleaner/tasks${statusParam}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${authToken}` }
             });
             const data = await res.json();
+
             if (res.ok) {
+                console.log('Tasks fetched successfully:', data.tasks?.length, 'tasks');
                 setTasks(data.tasks || []);
                 setStats(data.stats || {});
+            } else {
+                console.error('Cleaner tasks fetch failed:', res.status, data);
+                setFetchError(data.message || `Access denied (${res.status}). Make sure you're logged in as a cleaner/housekeeping role.`);
             }
         } catch (error) {
             console.error('Failed to fetch tasks:', error);
+            setFetchError('Network error. Could not connect to server.');
         } finally {
             setLoading(false);
         }
@@ -93,19 +122,21 @@ const CleanerDashboard = () => {
     }, []);
 
     useEffect(() => {
-        fetchTasks();
-        // Poll every 15 seconds as fallback
-        const interval = setInterval(fetchTasks, 15000);
-        return () => clearInterval(interval);
-    }, [filter]);
+        if (token) {
+            fetchTasks();
+            // Poll every 15 seconds as fallback
+            const interval = setInterval(fetchTasks, 15000);
+            return () => clearInterval(interval);
+        }
+    }, [filter, token]);
 
     const handleStart = async (taskId) => {
         setActionLoading(taskId);
         try {
-            const token = localStorage.getItem('token');
+            const authToken = token || localStorage.getItem('token');
             const res = await fetch(`http://localhost:5000/api/cleaner/tasks/${taskId}/start`, {
                 method: 'PATCH',
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${authToken}` }
             });
             const data = await res.json();
             if (res.ok) {
@@ -124,11 +155,11 @@ const CleanerDashboard = () => {
     const handleComplete = async (taskId) => {
         setActionLoading(taskId);
         try {
-            const token = localStorage.getItem('token');
+            const authToken = token || localStorage.getItem('token');
             const res = await fetch(`http://localhost:5000/api/cleaner/tasks/${taskId}/complete`, {
                 method: 'PATCH',
                 headers: {
-                    Authorization: `Bearer ${token}`,
+                    Authorization: `Bearer ${authToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ notes: 'Room cleaned and inspected' })
@@ -184,12 +215,12 @@ const CleanerDashboard = () => {
         };
 
         try {
-            const token = localStorage.getItem('token');
+            const authToken = token || localStorage.getItem('token');
             const res = await fetch('http://localhost:5000/api/cleaner/report', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
+                    Authorization: `Bearer ${authToken}`
                 },
                 body: JSON.stringify(reportData)
             });
@@ -239,8 +270,26 @@ const CleanerDashboard = () => {
                     >
                         <RefreshCw size={16} /> Refresh
                     </button>
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700"
+                    >
+                        <LogOut size={16} /> Logout
+                    </button>
                 </div>
             </div>
+
+            {/* Error Banner */}
+            {fetchError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+                    <div className="flex items-center gap-2 font-medium">
+                        <AlertTriangle size={18} />
+                        <span>Error Loading Tasks</span>
+                    </div>
+                    <p className="text-sm mt-1">{fetchError}</p>
+                    <p className="text-xs mt-2 text-red-500">Current role: {user?.role || 'Unknown'} | Required: cleaner, housekeeping, or admin</p>
+                </div>
+            )}
 
             {/* Real-time Notification Toast */}
             {newNotification && (
