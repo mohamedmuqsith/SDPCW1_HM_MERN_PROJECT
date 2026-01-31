@@ -10,6 +10,18 @@ const roomSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    hotelName: {
+        type: String,
+        default: 'Central Hotel'
+    },
+    address: {
+        type: String,
+        default: '123 Main St, Metropolis'
+    },
+    category: {
+        type: String, // e.g., 'Luxury', 'Standard', 'Budget' or Hotel Category
+        default: 'Standard'
+    },
     price: {
         type: Number,
         required: true

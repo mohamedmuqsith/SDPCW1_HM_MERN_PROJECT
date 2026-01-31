@@ -27,7 +27,9 @@ const createNotification = async (userId, message, type, eventKey) => {
 // @access  Private (Guest/Staff)
 router.post('/', protect, async (req, res) => {
     try {
-        const { type, details, roomNumber, priority, preferredTime } = req.body;
+        console.log('[DEBUG] Service Request Body:', req.body);
+        console.log('[DEBUG] Service Request User:', req.user._id);
+        const { type, details, roomNumber, priority, preferredTime, bookingId } = req.body;
 
         // ===== TYPE NORMALIZATION (Defense in Depth) =====
         // Map common variations to standard type names
@@ -44,10 +46,19 @@ router.post('/', protect, async (req, res) => {
         const normalizedType = typeNormalizationMap[type.toLowerCase()] || type;
 
         // 1. STRICT VALIDATION: Check for ACTIVE Check-in
-        const activeBooking = await Booking.findOne({
-            user: req.user._id,
-            status: 'Checked In'
-        });
+        let activeBooking;
+        if (bookingId) {
+            activeBooking = await Booking.findOne({
+                _id: bookingId,
+                user: req.user._id,
+                status: { $in: ['CHECKED_IN', 'CONFIRMED'] }
+            });
+        } else {
+            activeBooking = await Booking.findOne({
+                user: req.user._id,
+                status: { $in: ['CHECKED_IN', 'CONFIRMED'] }
+            });
+        }
 
         const isStaff = ['admin', 'staff', 'receptionist'].includes(req.user.role);
 
@@ -63,6 +74,8 @@ router.post('/', protect, async (req, res) => {
 
         // 2. AUTO-MERGE CHECK: Look for same request (Type + Room) in last 2 mins
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+        console.log(`[DEBUG] Auto-Merge Query: Room=${room}, Type=${normalizedType}, Time>=${twoMinutesAgo}`);
+
         const duplicateRequest = await ServiceRequest.findOne({
             roomNumber: room,
             type: normalizedType,
@@ -71,6 +84,7 @@ router.post('/', protect, async (req, res) => {
         });
 
         if (duplicateRequest) {
+            console.log('[DEBUG] Auto-Merge Hit:', duplicateRequest._id);
             // MERGE: Add to notes instead of new request
             duplicateRequest.notes.push({
                 user: req.user._id,
@@ -94,6 +108,7 @@ router.post('/', protect, async (req, res) => {
 
         if (existingRequest && !isStaff) {
             // If duplicate exists but > 2 mins, we verify if we should reject
+            console.log('[DEBUG] Duplicate Request Found:', existingRequest._id);
             return res.status(400).json({
                 message: 'Request Rejected',
                 reason: `You already have a pending ${normalizedType} request.`,
@@ -179,7 +194,7 @@ router.post('/cleaner', protect, async (req, res) => {
         // ===== RULE 1: Active Booking Required =====
         const activeBooking = await Booking.findOne({
             user: req.user._id,
-            status: 'Checked In'
+            status: { $in: ['CHECKED_IN', 'CONFIRMED'] }
         });
 
         if (!activeBooking) {

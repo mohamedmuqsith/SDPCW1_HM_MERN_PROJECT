@@ -4,10 +4,15 @@ import { Link } from 'react-router-dom';
 import { Calendar, Clock, MapPin, CreditCard, Bell } from 'lucide-react';
 
 const GuestDashboard = () => {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [activeBookings, setActiveBookings] = useState([]);
     const [myRequests, setMyRequests] = useState([]);
+
     const [loading, setLoading] = useState(true);
+    // Inline Service Request State
+    const [serviceType, setServiceType] = useState({}); // keyed by booking ID
+    const [serviceDetails, setServiceDetails] = useState({}); // keyed by booking ID
+    const [requestLoading, setRequestLoading] = useState(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -16,12 +21,16 @@ const GuestDashboard = () => {
                     const userId = user._id || user.id;
 
                     // Fetch Bookings
-                    const bookingsRes = await fetch(`http://localhost:5000/api/bookings?userId=${userId}`);
+                    const bookingsRes = await fetch(`http://localhost:5000/api/bookings?userId=${userId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
                     if (bookingsRes.ok) {
                         const data = await bookingsRes.json();
                         setActiveBookings(data.map(b => ({
                             id: b._id,
                             room: b.roomName,
+                            hotelName: b.hotelName || 'Central Hotel', // Fallback
+                            address: b.address || '123 Main St, Metropolis', // Fallback
                             checkIn: new Date(b.checkIn).toLocaleDateString(),
                             checkOut: new Date(b.checkOut).toLocaleDateString(),
                             status: b.status,
@@ -30,7 +39,9 @@ const GuestDashboard = () => {
                     }
 
                     // Fetch Service Requests
-                    const requestsRes = await fetch(`http://localhost:5000/api/service-requests?userId=${userId}`);
+                    const requestsRes = await fetch(`http://localhost:5000/api/service-requests?userId=${userId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
                     if (requestsRes.ok) {
                         const data = await requestsRes.json();
                         setMyRequests(data);
@@ -45,7 +56,63 @@ const GuestDashboard = () => {
         };
 
         fetchData();
-    }, [user]);
+    }, [user, token]);
+
+    const handleServiceRequest = async (bookingId) => {
+        const type = serviceType[bookingId];
+        const details = serviceDetails[bookingId];
+
+        if (!type || !details) {
+            alert('Please select a service and provide details.');
+            return;
+        }
+
+        setRequestLoading(bookingId);
+        try {
+            // NOTE: In a real app, we might need a mapping for 'type' string if backend expects specific enums
+            const res = await fetch('http://localhost:5000/api/service-requests', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userId: user.id || user._id,
+                    bookingId: bookingId, // Link request to specific booking
+                    type: type,
+                    details: details,
+                    priority: 'Medium'
+                })
+            });
+
+            if (res.ok) {
+                alert('Service Request Sent!');
+                // Clear inputs
+                setServiceType(prev => ({ ...prev, [bookingId]: '' }));
+                setServiceDetails(prev => ({ ...prev, [bookingId]: '' }));
+            } else {
+                const errData = await res.json();
+                alert(`Request Failed: ${errData.reason || errData.message || 'Unknown Error'}`);
+            }
+        } catch (error) {
+            console.error(error);
+            alert(`Network Error: ${error.message}`);
+        } finally {
+            setRequestLoading(null);
+        }
+    };
+
+    const getStatusStyle = (status) => {
+        switch (status) {
+            case 'PENDING_APPROVAL': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'CONFIRMED': return 'bg-green-100 text-green-800 border-green-200';
+            case 'CHECKED_IN': return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'CHECKED_OUT': return 'bg-slate-100 text-slate-800 border-slate-200';
+            case 'CANCELLED': return 'bg-red-100 text-red-800 border-red-200';
+            case 'REJECTED': return 'bg-red-100 text-red-800 border-red-200';
+            default: return 'bg-slate-100 text-slate-800';
+        }
+    };
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -75,7 +142,7 @@ const GuestDashboard = () => {
                                     <div>
                                         <div className="flex justify-between items-start mb-2">
                                             <h3 className="text-lg font-bold text-slate-900">{booking.room}</h3>
-                                            <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase rounded-full">
+                                            <span className={`px-3 py-1 text-xs font-bold uppercase rounded-full border ${getStatusStyle(booking.status)}`}>
                                                 {booking.status}
                                             </span>
                                         </div>
@@ -86,21 +153,55 @@ const GuestDashboard = () => {
                                             </div>
                                             <div className="flex items-center">
                                                 <MapPin className="w-4 h-4 mr-2 text-slate-400" />
-                                                Room 304, 3rd Floor (Ocean Wing)
+                                                {booking.hotelName}
+                                            </div>
+                                            <div className="text-xs text-slate-400 pl-6">
+                                                {booking.address}
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="mt-6 flex gap-3">
-                                        <button className="flex-1 bg-primary-50 text-primary-700 py-2 rounded-lg font-medium hover:bg-primary-100 transition-colors text-sm">
-                                            Manage Booking
-                                        </button>
-                                        <Link
-                                            to="/dashboard/services"
-                                            className="flex-1 border border-slate-200 text-slate-700 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors text-sm flex items-center justify-center"
-                                        >
-                                            Request Service
-                                        </Link>
+                                    {/* Inline Service Request - Restricted to Confirmed/Checked In */}
+                                    {(booking.status === 'CONFIRMED' || booking.status === 'CHECKED_IN') ? (
+                                        <div className="mt-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Request Services</p>
+                                            <div className="flex flex-col gap-2">
+                                                <select
+                                                    className="text-sm border-slate-200 rounded-lg py-1.5 focus:ring-primary-500"
+                                                    value={serviceType[booking.id] || ''}
+                                                    onChange={(e) => setServiceType(prev => ({ ...prev, [booking.id]: e.target.value }))}
+                                                >
+                                                    <option value="">Select Service...</option>
+                                                    <option value="Housekeeping">Housekeeping</option>
+                                                    <option value="Room Service">Room Service</option>
+                                                    <option value="Transport">Transport</option>
+                                                    <option value="Tech Support">Tech Support</option>
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Details (e.g. Extra Towels, Burger)"
+                                                    className="text-sm border-slate-200 rounded-lg py-1.5 focus:ring-primary-500"
+                                                    value={serviceDetails[booking.id] || ''}
+                                                    onChange={(e) => setServiceDetails(prev => ({ ...prev, [booking.id]: e.target.value }))}
+                                                />
+                                                <button
+                                                    onClick={() => handleServiceRequest(booking.id)}
+                                                    disabled={requestLoading === booking.id}
+                                                    className="bg-slate-900 text-white text-xs font-bold py-2 rounded-lg hover:bg-slate-800 transition-colors"
+                                                >
+                                                    {requestLoading === booking.id ? 'Sending...' : 'Submit Request'}
+                                                </button>
+                                                <p className="text-[10px] text-slate-400 italic text-center">*Charges may apply for Dining/Transport</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-4 p-3 bg-slate-50 text-slate-400 text-xs italic rounded-lg text-center border border-slate-100">
+                                            Services available after booking confirmation.
+                                        </div>
+                                    )}
+
+                                    <div className="mt-4 flex gap-3">
+                                        {/* Actions removed/simplified as inline request is added above */}
                                     </div>
                                 </div>
                             </div>
@@ -156,7 +257,7 @@ const GuestDashboard = () => {
                         </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-primary-900 to-primary-700 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden">
+                    <div className="bg-linear-to-br from-primary-900 to-primary-700 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl" />
                         <h3 className="text-lg font-bold mb-1">Loyalty Member</h3>
                         <p className="text-primary-200 text-sm mb-6">Gold Tier</p>

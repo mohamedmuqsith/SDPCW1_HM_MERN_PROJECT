@@ -14,6 +14,7 @@ import RoomSearch from './pages/guest/RoomSearch';
 import GuestDashboard from './pages/guest/GuestDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ServiceRequest from './pages/guest/ServiceRequest';
+import HotelsList from './pages/guest/HotelsList';
 import AdminLayout from './components/admin/AdminLayout';
 import BookingManagement from './pages/admin/BookingManagement';
 import RoomManagement from './pages/admin/RoomManagement';
@@ -50,6 +51,7 @@ function App() {
           {/* Public Routes with Main Layout */}
           <Route path="/" element={<MainLayout />}>
             <Route index element={<LandingPage />} />
+            <Route path="hotels" element={<HotelsList />} />
             <Route path="rooms" element={<RoomSearch />} />
             <Route path="book/:roomId" element={<BookingPage />} />
             <Route path="services" element={<Services />} />

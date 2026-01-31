@@ -242,9 +242,9 @@ const BookingManagement = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            ${booking.status === 'Confirmed' ? 'bg-green-100 text-green-800' :
-                                                booking.status === 'Pending Approval' ? 'bg-blue-100 text-blue-800' :
-                                                    booking.status === 'Cancelled' || booking.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                            ${booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                                                booking.status === 'PENDING_APPROVAL' ? 'bg-blue-100 text-blue-800' :
+                                                    booking.status === 'CANCELLED' || booking.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
                                                         'bg-slate-100 text-slate-800'
                                             }`}>
                                             {booking.status}
@@ -253,7 +253,7 @@ const BookingManagement = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end items-center space-x-2">
                                             {/* APPROVAL WORKFLOW ACTIONS */}
-                                            {booking.status === 'Pending Approval' && (
+                                            {booking.status === 'PENDING_APPROVAL' && (
                                                 <>
                                                     <button
                                                         onClick={() => handleApprove(booking._id)}
@@ -273,7 +273,7 @@ const BookingManagement = () => {
                                             )}
 
                                             {/* CHECK-IN ACTION */}
-                                            {booking.status === 'Confirmed' && (
+                                            {booking.status === 'CONFIRMED' && (
                                                 <button
                                                     onClick={() => handleCheckIn(booking._id)}
                                                     className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-200 mr-1"
@@ -284,7 +284,7 @@ const BookingManagement = () => {
                                             )}
 
                                             {/* CHECK-OUT ACTION */}
-                                            {booking.status === 'Checked In' && (
+                                            {booking.status === 'CHECKED_IN' && (
                                                 <>
                                                     <button
                                                         onClick={() => handleAddServiceClick(booking)}
@@ -383,12 +383,12 @@ const BookingManagement = () => {
                                     onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
                                     className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
                                 >
-                                    <option value="Pending Approval">Pending Approval</option>
-                                    <option value="Confirmed">Confirmed</option>
-                                    <option value="Checked In">Checked In</option>
-                                    <option value="Checked Out">Checked Out</option>
-                                    <option value="Rejected">Rejected</option>
-                                    <option value="Cancelled">Cancelled</option>
+                                    <option value="PENDING_APPROVAL">Pending Approval</option>
+                                    <option value="CONFIRMED">Confirmed</option>
+                                    <option value="CHECKED_IN">Checked In</option>
+                                    <option value="CHECKED_OUT">Checked Out</option>
+                                    <option value="REJECTED">Rejected</option>
+                                    <option value="CANCELLED">Cancelled</option>
                                 </select>
                             </div>
 

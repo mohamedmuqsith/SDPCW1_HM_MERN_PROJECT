@@ -34,28 +34,35 @@ const AllBookingsPage = () => {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'Pending Approval': return 'bg-orange-100 text-orange-700';
-            case 'Confirmed': return 'bg-blue-100 text-blue-700';
-            case 'Checked In': return 'bg-green-100 text-green-700';
-            case 'Checked Out': return 'bg-slate-100 text-slate-700';
-            case 'Rejected': return 'bg-red-100 text-red-700';
-            case 'Cancelled': return 'bg-red-100 text-red-700';
+            case 'PENDING_APPROVAL': return 'bg-orange-100 text-orange-700';
+            case 'CONFIRMED': return 'bg-blue-100 text-blue-700';
+            case 'CHECKED_IN': return 'bg-green-100 text-green-700';
+            case 'CHECKED_OUT': return 'bg-slate-100 text-slate-700';
+            case 'REJECTED': return 'bg-red-100 text-red-700';
+            case 'CANCELLED': return 'bg-red-100 text-red-700';
             default: return 'bg-slate-100 text-slate-700';
         }
     };
 
     const getStatusIcon = (status) => {
         switch (status) {
-            case 'Pending Approval': return <Clock size={14} />;
-            case 'Confirmed': return <Check size={14} />;
-            case 'Checked In': return <UserCheck size={14} />;
-            case 'Checked Out': return <LogOut size={14} />;
-            case 'Rejected': return <X size={14} />;
+            case 'PENDING_APPROVAL': return <Clock size={14} />;
+            case 'CONFIRMED': return <Check size={14} />;
+            case 'CHECKED_IN': return <UserCheck size={14} />;
+            case 'CHECKED_OUT': return <LogOut size={14} />;
+            case 'REJECTED': return <X size={14} />;
             default: return null;
         }
     };
 
-    const statusFilters = ['all', 'Pending Approval', 'Confirmed', 'Checked In', 'Checked Out', 'Rejected'];
+    const statusFilters = [
+        { value: 'all', label: 'All' },
+        { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+        { value: 'CONFIRMED', label: 'Confirmed' },
+        { value: 'CHECKED_IN', label: 'Checked In' },
+        { value: 'CHECKED_OUT', label: 'Checked Out' },
+        { value: 'REJECTED', label: 'Rejected' }
+    ];
 
     return (
         <div className="max-w-6xl mx-auto">
@@ -69,16 +76,16 @@ const AllBookingsPage = () => {
 
             {/* Filters */}
             <div className="flex flex-wrap gap-2 mb-6">
-                {statusFilters.map((status) => (
+                {statusFilters.map((s) => (
                     <button
-                        key={status}
-                        onClick={() => setFilter(status)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filter === status
-                                ? 'bg-slate-900 text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        key={s.value}
+                        onClick={() => setFilter(s.value)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filter === s.value
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                     >
-                        {status === 'all' ? 'All' : status}
+                        {s.label}
                     </button>
                 ))}
             </div>

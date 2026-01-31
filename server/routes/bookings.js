@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
         // Overlap Logic: (StartA < EndB) && (EndA > StartB)
         const conflictBooking = await Booking.findOne({
             roomName: roomName, // Ensure we check the specific room
-            status: { $nin: ['Cancelled', 'Rejected'] }, // Ignore cancelled bookings
+            status: { $nin: ['CANCELLED', 'REJECTED'] }, // Ignore cancelled bookings
             $or: [
                 {
                     checkIn: { $lt: new Date(checkOut) },
@@ -115,7 +115,7 @@ router.post('/', async (req, res) => {
             checkIn,
             checkOut,
             totalPrice,
-            status: 'Pending Approval',
+            status: 'PENDING_APPROVAL',
             payment: newPayment._id
         });
         await newBooking.save();
@@ -151,7 +151,7 @@ router.post('/', async (req, res) => {
         await AuditLog.create({
             user: userId || 'Guest',
             action: 'Booking Request',
-            details: `Booking ${newBooking._id} requested. Status: Pending Approval.`,
+            details: `Booking ${newBooking._id} requested. Status: PENDING_APPROVAL.`,
             ipAddress: req.ip || '127.0.0.1'
         });
 
@@ -192,11 +192,11 @@ router.put('/:id/approve', async (req, res) => {
         const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-        if (booking.status !== 'Pending Approval') {
+        if (booking.status !== 'PENDING_APPROVAL') {
             return res.status(400).json({ message: `Cannot approve. Current status: ${booking.status}` });
         }
 
-        booking.status = 'Confirmed';
+        booking.status = 'CONFIRMED';
         await booking.save();
 
         await AuditLog.create({
@@ -234,7 +234,7 @@ router.put('/:id/reject', async (req, res) => {
             await Payment.findByIdAndUpdate(booking.payment, { status: 'Voided' });
         }
 
-        booking.status = 'Rejected';
+        booking.status = 'REJECTED';
         await booking.save();
 
         await AuditLog.create({
@@ -256,11 +256,11 @@ router.put('/:id/checkin', async (req, res) => {
         const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-        if (booking.status !== 'Confirmed') {
-            return res.status(400).json({ message: `Cannot Check-In. Status must be Confirmed. Current: ${booking.status}` });
+        if (booking.status !== 'CONFIRMED') {
+            return res.status(400).json({ message: `Cannot Check-In. Status must be CONFIRMED. Current: ${booking.status}` });
         }
 
-        booking.status = 'Checked In';
+        booking.status = 'CHECKED_IN';
         booking.actualCheckIn = new Date(); // Record actual time
         await booking.save();
 
@@ -303,7 +303,7 @@ router.post('/:id/charges', async (req, res) => {
         const booking = await Booking.findById(req.params.id);
 
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
-        if (booking.status !== 'Checked In') return res.status(400).json({ message: 'Guest must be Checked In to add charges.' });
+        if (booking.status !== 'CHECKED_IN') return res.status(400).json({ message: 'Guest must be CHECKED_IN to add charges.' });
 
         booking.charges.push({ description, amount });
         await booking.save();
@@ -330,8 +330,8 @@ router.put('/:id/checkout', async (req, res) => {
         const booking = await Booking.findById(req.params.id).populate('payment');
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-        if (booking.status !== 'Checked In') {
-            return res.status(400).json({ message: `Cannot Check-Out. Guest is not Checked In.` });
+        if (booking.status !== 'CHECKED_IN') {
+            return res.status(400).json({ message: `Cannot Check-Out. Guest is not CHECKED_IN.` });
         }
 
 
@@ -407,7 +407,7 @@ router.put('/:id/checkout', async (req, res) => {
         booking.invoices.push(finalInvoice._id);
 
         // 6. Complete Check-Out
-        booking.status = 'Checked Out';
+        booking.status = 'CHECKED_OUT';
         booking.actualCheckOut = new Date();
         await booking.save();
 

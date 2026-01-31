@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, Calendar, Users, Loader2 } from 'lucide-react';
+import { Search, Calendar, Users, Loader2, MapPin } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import RoomDetailsModal from '../../components/guest/RoomDetailsModal';
+import BookingModal from '../../components/guest/BookingModal';
 import RoomCard from '../../components/guest/RoomCard';
 
 const RoomSearch = () => {
+    const [searchParams] = useSearchParams();
+    const urlHotel = searchParams.get('hotel');
+
     const [rooms, setRooms] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('All');
+    // Booking Modal State
+    const [selectedRoom, setSelectedRoom] = useState(null);
+    const [isBookingOpen, setIsBookingOpen] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
     useEffect(() => {
         const fetchRooms = async () => {
@@ -14,17 +24,22 @@ const RoomSearch = () => {
                 const response = await fetch('http://localhost:5000/api/rooms');
                 if (response.ok) {
                     const data = await response.json();
-                    // Map API data structure to UI component structure if needed
-                    const formattedRooms = data.map(room => ({
+
+                    // Simulate Multi-Hotel Data if needed (or rely on backend defaults)
+                    const formattedRooms = data.map((room, index) => ({
                         id: room._id,
-                        name: `Room ${room.number}`, // Or add a name field to backend
+                        number: room.number, // Ensure number is passed
+                        name: `Room ${room.number}`,
                         type: room.type,
                         price: room.price,
-                        rating: 4.8, // Default rating 
-                        reviews: 24, // Default reviews
+                        rating: 4.8,
+                        reviews: 24,
                         image: room.image || 'https://images.unsplash.com/photo-1590490360182-c33d57733427?ixlib=rb-4.0.3&auto=format&fit=crop&w=1074&q=80',
                         description: room.description,
-                        amenities: room.amenities || ['Wifi', 'TV', 'AC']
+                        amenities: room.amenities || ['Wifi', 'TV', 'AC'],
+                        // Assign some dummy hotels if not present, for demo purposes
+                        hotelName: room.hotelName || (index % 2 === 0 ? 'Central Hotel' : 'Grand Plaza Resort'),
+                        address: room.address || (index % 2 === 0 ? '123 Main St, Metropolis' : '456 Ocean Dr, Seaside')
                     }));
                     setRooms(formattedRooms);
                 }
@@ -39,10 +54,31 @@ const RoomSearch = () => {
     }, []);
 
     const filteredRooms = rooms.filter(room => {
-        const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            room.hotelName.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesType = filterType === 'All' || room.type === filterType;
-        return matchesSearch && matchesType;
+        const matchesUrlHotel = !urlHotel || room.hotelName === urlHotel;
+
+        return matchesSearch && matchesType && matchesUrlHotel;
     });
+
+    // Group by Hotel
+    const roomsByHotel = filteredRooms.reduce((acc, room) => {
+        const hotel = room.hotelName;
+        if (!acc[hotel]) acc[hotel] = { address: room.address, rooms: [] };
+        acc[hotel].rooms.push(room);
+        return acc;
+    }, {});
+
+    const handleViewDetails = (room) => {
+        setSelectedRoom(room);
+        setIsDetailsOpen(true);
+    };
+
+    const handleProceedToBook = () => {
+        setIsDetailsOpen(false);
+        setIsBookingOpen(true);
+    };
 
     return (
         <div className="bg-slate-50 min-h-screen pb-20">
@@ -50,7 +86,7 @@ const RoomSearch = () => {
             <div className="bg-white shadow-sm border-b border-slate-200 sticky top-16 z-40">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
-                        <div className="relative flex-grow">
+                        <div className="relative grow">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
                             <input
                                 type="text"
@@ -97,9 +133,33 @@ const RoomSearch = () => {
                 {loading ? (
                     <div className="flex justify-center p-12"><Loader2 className="animate-spin text-primary-600 h-8 w-8" /></div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {filteredRooms.map((room) => (
-                            <RoomCard key={room.id} room={room} />
+                    <div className="space-y-12">
+                        {Object.entries(roomsByHotel).map(([hotelName, data]) => (
+                            <div key={hotelName} className="animate-fade-in">
+                                <div className="flex items-end justify-between mb-6 border-b border-slate-200 pb-4">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-900">{hotelName}</h2>
+                                        <div className="flex items-center text-slate-500 mt-1 text-sm">
+                                            <MapPin size={16} className="mr-1" />
+                                            {data.address}
+                                        </div>
+                                    </div>
+                                    <span className="bg-primary-50 text-primary-700 px-3 py-1 rounded-full text-xs font-bold uppercase">
+                                        {data.rooms.length} Rooms Available
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {data.rooms.map((room) => (
+                                        <div key={room.id} className="relative group">
+                                            {/* Pass handleBookClick to RoomCard or handle internal? 
+                                                Plan: RoomCard "View Details" -> RoomDetailsModal -> "Book" -> BookingModal.
+                                            */}
+                                            <RoomCard room={room} onBookClick={() => handleViewDetails(room)} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
                 )}
@@ -111,7 +171,21 @@ const RoomSearch = () => {
                     </div>
                 )}
             </div>
-        </div>
+
+
+            <RoomDetailsModal
+                isOpen={isDetailsOpen}
+                onClose={() => setIsDetailsOpen(false)}
+                room={selectedRoom}
+                onBook={handleProceedToBook}
+            />
+
+            <BookingModal
+                isOpen={isBookingOpen}
+                onClose={() => setIsBookingOpen(false)}
+                room={selectedRoom}
+            />
+        </div >
     );
 };
 

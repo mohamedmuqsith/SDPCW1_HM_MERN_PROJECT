@@ -46,7 +46,7 @@ router.get('/bookings', receptionistAuth, async (req, res) => {
 // @access  Receptionist, Admin
 router.get('/bookings/pending', receptionistAuth, async (req, res) => {
     try {
-        const bookings = await Booking.find({ status: 'Pending Approval' })
+        const bookings = await Booking.find({ status: 'PENDING_APPROVAL' })
             .populate('user', 'name email')
             .sort({ createdAt: 1 }); // FIFO for pending
 
@@ -69,7 +69,7 @@ router.put('/bookings/:id/approve', receptionistAuth, async (req, res) => {
             return res.status(404).json({ message: 'Booking not found', code: 'NOT_FOUND' });
         }
 
-        if (booking.status !== 'Pending Approval') {
+        if (booking.status !== 'PENDING_APPROVAL') {
             return res.status(400).json({
                 message: 'Cannot approve this booking',
                 reason: `Current status is '${booking.status}'. Only 'Pending Approval' bookings can be approved.`,
@@ -77,7 +77,7 @@ router.put('/bookings/:id/approve', receptionistAuth, async (req, res) => {
             });
         }
 
-        booking.status = 'Confirmed';
+        booking.status = 'CONFIRMED';
         if (assignedRoom) {
             booking.assignedRoom = assignedRoom;
         }
@@ -125,7 +125,7 @@ router.put('/bookings/:id/reject', receptionistAuth, async (req, res) => {
             return res.status(404).json({ message: 'Booking not found', code: 'NOT_FOUND' });
         }
 
-        if (booking.status !== 'Pending Approval') {
+        if (booking.status !== 'PENDING_APPROVAL') {
             return res.status(400).json({
                 message: 'Cannot reject this booking',
                 reason: `Current status is '${booking.status}'. Only 'Pending Approval' bookings can be rejected.`,
@@ -139,7 +139,7 @@ router.put('/bookings/:id/reject', receptionistAuth, async (req, res) => {
             await Payment.findByIdAndUpdate(booking.payment, { status: 'Voided' });
         }
 
-        booking.status = 'Rejected';
+        booking.status = 'REJECTED';
         await booking.save();
 
         // Audit Log
@@ -188,7 +188,7 @@ router.put('/bookings/:id/checkin', receptionistAuth, async (req, res) => {
             return res.status(404).json({ message: 'Booking not found', code: 'NOT_FOUND' });
         }
 
-        if (booking.status !== 'Confirmed') {
+        if (booking.status !== 'CONFIRMED') {
             return res.status(400).json({
                 message: 'Cannot check-in guest',
                 reason: `Booking must be 'Confirmed' first. Current status: '${booking.status}'`,
@@ -206,7 +206,7 @@ router.put('/bookings/:id/checkin', receptionistAuth, async (req, res) => {
         }
 
         // Update booking
-        booking.status = 'Checked In';
+        booking.status = 'CHECKED_IN';
         booking.actualCheckIn = new Date();
         booking.idVerified = true;
         booking.idVerifiedBy = req.user._id;
@@ -288,7 +288,7 @@ router.put('/bookings/:id/checkout', receptionistAuth, async (req, res) => {
             return res.status(404).json({ message: 'Booking not found', code: 'NOT_FOUND' });
         }
 
-        if (booking.status !== 'Checked In') {
+        if (booking.status !== 'CHECKED_IN') {
             return res.status(400).json({
                 message: 'Cannot check-out guest',
                 reason: `Guest must be 'Checked In' first. Current status: '${booking.status}'`,
@@ -354,7 +354,7 @@ router.put('/bookings/:id/checkout', receptionistAuth, async (req, res) => {
         await finalInvoice.save();
 
         // Update booking
-        booking.status = 'Checked Out';
+        booking.status = 'CHECKED_OUT';
         booking.actualCheckOut = new Date();
         booking.invoices.push(finalInvoice._id);
         await booking.save();
@@ -552,10 +552,10 @@ router.get('/stats', receptionistAuth, async (req, res) => {
             currentlyCheckedIn,
             newServiceRequests
         ] = await Promise.all([
-            Booking.countDocuments({ status: 'Pending Approval' }),
-            Booking.countDocuments({ checkIn: { $gte: today, $lt: tomorrow }, status: 'Confirmed' }),
-            Booking.countDocuments({ checkOut: { $gte: today, $lt: tomorrow }, status: 'Checked In' }),
-            Booking.countDocuments({ status: 'Checked In' }),
+            Booking.countDocuments({ status: 'PENDING_APPROVAL' }),
+            Booking.countDocuments({ checkIn: { $gte: today, $lt: tomorrow }, status: 'CONFIRMED' }),
+            Booking.countDocuments({ checkOut: { $gte: today, $lt: tomorrow }, status: 'CHECKED_IN' }),
+            Booking.countDocuments({ status: 'CHECKED_IN' }),
             ServiceRequest.countDocuments({ status: 'New' })
         ]);
 

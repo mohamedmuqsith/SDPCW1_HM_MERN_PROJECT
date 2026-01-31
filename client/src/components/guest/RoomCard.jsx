@@ -1,7 +1,7 @@
 import { Star, Wifi, Coffee, Tv } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const RoomCard = ({ room }) => {
+const RoomCard = ({ room, onBookClick }) => {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl transition-all duration-300 group">
             <div className="relative h-64 overflow-hidden">
@@ -47,12 +47,12 @@ const RoomCard = ({ room }) => {
                     {room.description}
                 </p>
 
-                <Link
-                    to={`/book/${room.id}`}
+                <button
+                    onClick={onBookClick} // This now triggers Details View
                     className="block w-full text-center bg-slate-900 hover:bg-primary-600 text-white py-3 rounded-xl font-medium transition-colors"
                 >
-                    Book Now
-                </Link>
+                    View Details
+                </button>
             </div>
         </div>
     );
