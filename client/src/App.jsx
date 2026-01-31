@@ -28,6 +28,15 @@ import StaffRegister from './pages/auth/StaffRegister';
 import StaffRoomStatus from './pages/staff/StaffRoomStatus';
 import StaffBookings from './pages/staff/StaffBookings';
 import StaffNotifications from './pages/staff/StaffNotifications';
+// Receptionist imports
+import ReceptionistLayout from './components/admin/ReceptionistLayout';
+import ReceptionistDashboard from './pages/receptionist/ReceptionistDashboard';
+import CheckInPage from './pages/receptionist/CheckInPage';
+import CheckOutPage from './pages/receptionist/CheckOutPage';
+import ServiceRequestsPage from './pages/receptionist/ServiceRequestsPage';
+import AllBookingsPage from './pages/receptionist/AllBookingsPage';
+// Cleaner imports
+import CleanerDashboard from './pages/cleaner/CleanerDashboard';
 
 // Placeholder Pages for Staff
 // Placeholder Pages for Staff (Removed)
@@ -57,7 +66,7 @@ function App() {
 
           {/* Guest Protected Routes */}
           <Route path="/dashboard" element={
-            <PrivateRoute allowedRoles={['guest', 'admin', 'staff']}>
+            <PrivateRoute allowedRoles={['guest', 'admin', 'staff', 'receptionist']}>
               <MainLayout />
             </PrivateRoute>
           }>
@@ -66,9 +75,9 @@ function App() {
             <Route path="bookmarks" element={<div>My Bookings</div>} />
           </Route>
 
-          {/* Staff Protected Routes */}
+          {/* Staff Protected Routes (Housekeeping, Maintenance, Cleaner) */}
           <Route path="/staff" element={
-            <PrivateRoute allowedRoles={['staff', 'admin']}>
+            <PrivateRoute allowedRoles={['staff', 'housekeeping', 'maintenance', 'cleaner', 'admin']}>
               <StaffLayout />
             </PrivateRoute>
           }>
@@ -77,6 +86,26 @@ function App() {
             <Route path="rooms" element={<StaffRoomStatus />} />
             <Route path="notifications" element={<StaffNotifications />} />
           </Route>
+
+          {/* Receptionist Protected Routes */}
+          <Route path="/receptionist" element={
+            <PrivateRoute allowedRoles={['receptionist', 'admin']}>
+              <ReceptionistLayout />
+            </PrivateRoute>
+          }>
+            <Route index element={<ReceptionistDashboard />} />
+            <Route path="checkin" element={<CheckInPage />} />
+            <Route path="checkout" element={<CheckOutPage />} />
+            <Route path="service-requests" element={<ServiceRequestsPage />} />
+            <Route path="bookings" element={<AllBookingsPage />} />
+          </Route>
+
+          {/* Cleaner Protected Routes */}
+          <Route path="/cleaner" element={
+            <PrivateRoute allowedRoles={['cleaner', 'housekeeping', 'admin']}>
+              <CleanerDashboard />
+            </PrivateRoute>
+          } />
 
           {/* Admin Protected Routes */}
           <Route path="/admin" element={
@@ -102,3 +131,4 @@ function App() {
 }
 
 export default App;
+

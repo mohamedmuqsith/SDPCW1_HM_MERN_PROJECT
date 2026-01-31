@@ -7,6 +7,20 @@ const BookingManagement = () => {
     const [editingBooking, setEditingBooking] = useState(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+    // Checkout Modal State
+    const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+    const [checkoutBooking, setCheckoutBooking] = useState(null);
+    const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [paidAmount, setPaidAmount] = useState('');
+
+    // Service Charge Modal
+    const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+    const [serviceBooking, setServiceBooking] = useState(null);
+    const [serviceDesc, setServiceDesc] = useState('');
+    const [serviceAmount, setServiceAmount] = useState('');
+
+
+
     const fetchBookings = async () => {
         try {
             // For admin, we fetch all bookings
@@ -56,6 +70,97 @@ const BookingManagement = () => {
             }
         } catch (error) {
             console.error('Failed to delete booking:', error);
+        }
+    };
+
+    const handleApprove = async (id) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/bookings/${id}/approve`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                fetchBookings();
+            } else {
+                alert('Failed to approve booking');
+            }
+        } catch (error) {
+            console.error('Approval Error:', error);
+        }
+    };
+
+    const handleReject = async (id) => {
+        if (!window.confirm('Are you sure you want to reject this booking?')) return;
+
+        try {
+            const response = await fetch(`http://localhost:5000/api/bookings/${id}/reject`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                fetchBookings();
+            } else {
+                alert('Failed to reject booking');
+            }
+        } catch (error) {
+            console.error('Rejection Error:', error);
+        }
+    };
+
+    const handleCheckIn = async (id) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/bookings/${id}/checkin`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                fetchBookings();
+            } else {
+                alert('Failed to check in guest');
+            }
+        } catch (error) {
+            console.error('Check-in Error:', error);
+        }
+    };
+
+    const handleCheckOutClick = (booking) => {
+        setCheckoutBooking(booking);
+        // Default to remaining balance
+        const advance = booking.payment?.advanceAmount || 0;
+        const due = booking.totalPrice - advance;
+        setPaidAmount(due > 0 ? due.toString() : '0');
+        setIsCheckoutModalOpen(true);
+    };
+
+    const submitCheckOut = async () => {
+        if (!checkoutBooking) return;
+
+        try {
+            const response = await fetch(`http://localhost:5000/api/bookings/${checkoutBooking._id}/checkout`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    paymentMethod,
+                    paidAmount: Number(paidAmount)
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(`Check-out Complete!\nReceipt Generated.\nPaid: $${data.receipt.amountPaid}`);
+                setIsCheckoutModalOpen(false);
+                setCheckoutBooking(null);
+                fetchBookings();
+            } else {
+                alert(`Check-out Failed: ${data.message}\n(${data.financials ? 'Balance: $' + data.financials.remainingBalance : ''})`);
+            }
+        } catch (error) {
+            console.error('Check-out Error:', error);
+            alert('Server Error during checkout.');
         }
     };
 
@@ -138,32 +243,67 @@ const BookingManagement = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
                                             ${booking.status === 'Confirmed' ? 'bg-green-100 text-green-800' :
-                                                booking.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                    booking.status === 'Cancelled' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'
+                                                booking.status === 'Pending Approval' ? 'bg-blue-100 text-blue-800' :
+                                                    booking.status === 'Cancelled' || booking.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                                        'bg-slate-100 text-slate-800'
                                             }`}>
                                             {booking.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end items-center space-x-2">
-                                            {booking.status === 'Pending' && (
+                                            {/* APPROVAL WORKFLOW ACTIONS */}
+                                            {booking.status === 'Pending Approval' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleApprove(booking._id)}
+                                                        className="bg-green-100 text-green-700 px-3 py-1 rounded-lg hover:bg-green-200 mr-1"
+                                                        title="Confirm Booking"
+                                                    >
+                                                        Approve
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleReject(booking._id)}
+                                                        className="bg-red-100 text-red-700 px-3 py-1 rounded-lg hover:bg-red-200"
+                                                        title="Reject Booking"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {/* CHECK-IN ACTION */}
+                                            {booking.status === 'Confirmed' && (
                                                 <button
-                                                    onClick={() => updateStatus(booking._id, 'Confirmed')}
-                                                    className="text-green-600 hover:text-green-900"
-                                                    title="Confirm"
+                                                    onClick={() => handleCheckIn(booking._id)}
+                                                    className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-200 mr-1"
+                                                    title="Mark as Checked In"
                                                 >
-                                                    <CheckCircle size={18} />
+                                                    Check In
                                                 </button>
                                             )}
-                                            {booking.status !== 'Cancelled' && (
-                                                <button
-                                                    onClick={() => updateStatus(booking._id, 'Cancelled')}
-                                                    className="text-yellow-600 hover:text-yellow-900"
-                                                    title="Cancel"
-                                                >
-                                                    <XCircle size={18} />
-                                                </button>
+
+                                            {/* CHECK-OUT ACTION */}
+                                            {booking.status === 'Checked In' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleAddServiceClick(booking)}
+                                                        className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg hover:bg-yellow-200 mr-1"
+                                                        title="Add Extra Charge"
+                                                    >
+                                                        + Charge
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleCheckOutClick(booking)}
+                                                        className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg hover:bg-purple-200 mr-1"
+                                                        title="Check Out & Bill"
+                                                    >
+                                                        Check Out
+                                                    </button>
+                                                </>
                                             )}
+
+                                            {/* EXISTING EDIT/DELETE ACTIONS */}
                                             <button
                                                 onClick={() => handleEditClick(booking)}
                                                 className="text-blue-600 hover:text-blue-900 ml-2"
@@ -243,10 +383,11 @@ const BookingManagement = () => {
                                     onChange={(e) => setEditingBooking({ ...editingBooking, status: e.target.value })}
                                     className="w-full border-slate-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
                                 >
-                                    <option value="Pending">Pending</option>
+                                    <option value="Pending Approval">Pending Approval</option>
                                     <option value="Confirmed">Confirmed</option>
                                     <option value="Checked In">Checked In</option>
                                     <option value="Checked Out">Checked Out</option>
+                                    <option value="Rejected">Rejected</option>
                                     <option value="Cancelled">Cancelled</option>
                                 </select>
                             </div>
@@ -264,6 +405,196 @@ const BookingManagement = () => {
                                     className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
                                 >
                                     Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* CHECKOUT MODAL */}
+            {isCheckoutModalOpen && checkoutBooking && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                        <h3 className="text-xl font-bold mb-4">Final Breakdown & Payment</h3>
+
+                        <div className="bg-slate-50 p-4 rounded-lg mb-6 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Room Charge:</span>
+                                <span className="font-medium">${checkoutBooking.totalPrice}</span>
+                            </div>
+                            {/* Show Services Breakdown */}
+                            {checkoutBooking.charges && checkoutBooking.charges.map((charge, idx) => (
+                                <div key={idx} className="flex justify-between text-xs text-slate-600 pl-2 border-l-2 border-slate-200">
+                                    <span>{charge.description}</span>
+                                    <span>+${charge.amount}</span>
+                                </div>
+                            ))}
+                            <div className="flex justify-between text-sm font-semibold border-t border-slate-200 pt-1 mt-1">
+                                <span>Total Bill:</span>
+                                <span>${
+                                    checkoutBooking.totalPrice +
+                                    (checkoutBooking.charges ? checkoutBooking.charges.reduce((sum, item) => sum + item.amount, 0) : 0)
+                                }</span>
+                            </div>
+
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Advance Paid:</span>
+                                <span className="font-medium text-green-600">-${checkoutBooking.payment?.advanceAmount || 0}</span>
+                            </div>
+                            <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg">
+                                <span>Balance Due:</span>
+                                <span>${
+                                    (checkoutBooking.totalPrice +
+                                        (checkoutBooking.charges ? checkoutBooking.charges.reduce((sum, item) => sum + item.amount, 0) : 0)) -
+                                    (checkoutBooking.payment?.advanceAmount || 0)
+                                }</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
+                                <select
+                                    value={paymentMethod}
+                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                    className="w-full border rounded-lg p-2"
+                                >
+                                    <option value="cash">Cash</option>
+                                    <option value="card_machine">Card Machine (POS)</option>
+                                    <option value="online_transfer">Online Transfer</option>
+                                    <option value="card_on_file">Authorized Card (On File)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Amount Collecting Now</label>
+                                <input
+                                    type="number"
+                                    value={paidAmount}
+                                    onChange={(e) => setPaidAmount(e.target.value)}
+                                    className="w-full border rounded-lg p-2 text-right font-mono"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-8 space-y-3">
+                            <button
+                                onClick={submitCheckOut}
+                                disabled={
+                                    (checkoutBooking.totalPrice +
+                                        (checkoutBooking.charges ? checkoutBooking.charges.reduce((sum, item) => sum + item.amount, 0) : 0)) -
+                                    (checkoutBooking.payment?.advanceAmount || 0) - Number(paidAmount) > 0
+                                }
+                                className={`w-full py-3 rounded-lg font-bold text-white
+                                    ${(checkoutBooking.totalPrice + (checkoutBooking.charges ? checkoutBooking.charges.reduce((sum, item) => sum + item.amount, 0) : 0)) - (checkoutBooking.payment?.advanceAmount || 0) - Number(paidAmount) > 0
+                                        ? 'bg-slate-400 cursor-not-allowed'
+                                        : 'bg-green-600 hover:bg-green-700'
+                                    }`}
+                            >
+                                {(checkoutBooking.totalPrice + (checkoutBooking.charges ? checkoutBooking.charges.reduce((sum, item) => sum + item.amount, 0) : 0)) - (checkoutBooking.payment?.advanceAmount || 0) - Number(paidAmount) > 0
+                                    ? `Balance Remaining`
+                                    : 'Complete Check-Out'
+                                }
+                            </button>
+                            <button
+                                onClick={() => setIsCheckoutModalOpen(false)}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-lg"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
+            {/* SERVICE CHARGE MODAL */}
+            {isServiceModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                        <h3 className="text-xl font-bold mb-4">Add Service Charge</h3>
+                        <form onSubmit={submitServiceCharge} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                                <input
+                                    type="text"
+                                    value={serviceDesc}
+                                    onChange={(e) => setServiceDesc(e.target.value)}
+                                    placeholder="e.g., Room Service, Laundry"
+                                    className="w-full border rounded-lg p-2"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Amount ($)</label>
+                                <input
+                                    type="number"
+                                    value={serviceAmount}
+                                    onChange={(e) => setServiceAmount(e.target.value)}
+                                    className="w-full border rounded-lg p-2"
+                                    required
+                                />
+                            </div>
+                            <div className="flex space-x-3 mt-6">
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg font-bold"
+                                >
+                                    Add Charge
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsServiceModalOpen(false)}
+                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {/* SERVICE CHARGE MODAL */}
+            {isServiceModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                        <h3 className="text-xl font-bold mb-4">Add Service Charge</h3>
+                        <form onSubmit={submitServiceCharge} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                                <input
+                                    type="text"
+                                    value={serviceDesc}
+                                    onChange={(e) => setServiceDesc(e.target.value)}
+                                    placeholder="e.g., Room Service, Laundry"
+                                    className="w-full border rounded-lg p-2"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Amount ($)</label>
+                                <input
+                                    type="number"
+                                    value={serviceAmount}
+                                    onChange={(e) => setServiceAmount(e.target.value)}
+                                    className="w-full border rounded-lg p-2"
+                                    required
+                                />
+                            </div>
+                            <div className="flex space-x-3 mt-6">
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg font-bold"
+                                >
+                                    Add Charge
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsServiceModalOpen(false)}
+                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg"
+                                >
+                                    Cancel
                                 </button>
                             </div>
                         </form>

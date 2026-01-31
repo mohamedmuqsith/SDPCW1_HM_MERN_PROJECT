@@ -11,16 +11,47 @@ import reportRoutes from './routes/reports.js';
 import serviceRoutes from './routes/services.js';
 import serviceRequestRoutes from './routes/serviceRequests.js';
 import notificationRoutes from './routes/notifications.js';
+import receptionistRoutes from './routes/receptionist.js';
+import cleanerRoutes from './routes/cleaner.js';
+import './models/Payment.js'; // Ensure Payment model is registered
+
+
+import { Server } from 'socket.io';
+import http from 'http';
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// Socket.io Setup
+const io = new Server(server, {
+    cors: {
+        origin: "http://localhost:5173", // URL of your frontend
+        methods: ["GET", "POST"]
+    }
+});
+
+io.on('connection', (socket) => {
+    // console.log('New client connected:', socket.id); // Reduced log noise
+
+    socket.on('disconnect', (reason) => {
+        // console.log('Client disconnected:', socket.id, 'Reason:', reason);
+    });
+
+    socket.on('error', (err) => {
+        console.error('Socket error:', err);
+    });
+});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+// Make io accessible to routes
+app.set('io', io);
 
 
 // Routes
@@ -33,6 +64,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/receptionist', receptionistRoutes);
+app.use('/api/cleaner', cleanerRoutes);
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
@@ -44,6 +77,6 @@ app.get('/', (req, res) => {
     res.send('Hotel Management System API is running...');
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

@@ -34,4 +34,34 @@ router.put('/:id/read', async (req, res) => {
     }
 });
 
+// @route   POST /api/notifications/process-queue
+// @desc    Worker Simulation: Process PENDING notifications
+router.post('/process-queue', async (req, res) => {
+    try {
+        const pending = await Notification.find({ status: 'PENDING' }).limit(10);
+        const results = [];
+
+        for (const notif of pending) {
+            try {
+                // SIMULATE SENDING (Email/SMS/Push)
+                console.log(`[WORKER] Sending to User ${notif.user}: ${notif.message} (Event: ${notif.eventKey})`);
+
+                notif.status = 'SENT';
+                await notif.save();
+                results.push({ id: notif._id, status: 'SENT' });
+            } catch (err) {
+                notif.status = 'FAILED';
+                notif.retryCount += 1;
+                await notif.save();
+                results.push({ id: notif._id, status: 'FAILED', error: err.message });
+            }
+        }
+
+        res.json({ processed: results.length, details: results });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Worker Error' });
+    }
+});
+
 export default router;

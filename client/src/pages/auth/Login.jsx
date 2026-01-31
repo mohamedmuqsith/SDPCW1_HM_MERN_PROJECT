@@ -8,20 +8,16 @@ const Login = () => {
     const [password, setPassword] = useState('');
     const [emailError, setEmailError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login, loginWithGoogle } = useAuth();
+    const { login, loginWithGoogle, getRoleRedirectPath } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
     const from = location.state?.from?.pathname || '/dashboard';
 
     const handleRedirect = (userData) => {
-        if (userData.role === 'admin') {
-            navigate('/admin', { replace: true });
-        } else if (userData.role === 'staff') {
-            navigate('/staff', { replace: true });
-        } else {
-            navigate(from, { replace: true });
-        }
+        // Use centralized role-based redirect
+        const redirectPath = getRoleRedirectPath(userData.role);
+        navigate(redirectPath, { replace: true });
     };
 
     const validateEmail = (email) => {
@@ -107,8 +103,8 @@ const Login = () => {
                             type="email"
                             required
                             className={`block w-full pl-10 sm:text-sm rounded-lg py-2 focus:ring-primary-500 focus:border-primary-500 ${emailError
-                                    ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
-                                    : 'border-slate-300'
+                                ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
+                                : 'border-slate-300'
                                 }`}
                             placeholder="you@example.com"
                             value={email}

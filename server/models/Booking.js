@@ -15,12 +15,18 @@ const bookingSchema = new mongoose.Schema({
         required: true
     },
     checkIn: {
-        type: Date,
+        type: Date, // Planned Check-in
         required: true
     },
     checkOut: {
-        type: Date,
+        type: Date, // Planned Check-out
         required: true
+    },
+    actualCheckIn: {
+        type: Date // Set at Check-In time
+    },
+    actualCheckOut: {
+        type: Date // Set at Check-Out time
     },
     totalPrice: {
         type: Number,
@@ -28,8 +34,41 @@ const bookingSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'Confirmed', 'Cancelled', 'Checked In', 'Checked Out'],
-        default: 'Pending'
+        enum: ['Draft', 'Pending Approval', 'Confirmed', 'Checked In', 'Checked Out', 'Rejected', 'Cancelled'],
+        default: 'Pending Approval'
+    },
+    payment: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Payment'
+    },
+    invoices: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Invoice'
+    }],
+    charges: [{
+        description: { type: String, required: true },
+        amount: { type: Number, required: true },
+        date: { type: Date, default: Date.now }
+    }],
+    // Receptionist Workflow Fields
+    assignedRoom: {
+        type: String  // Physical room number assigned at check-in
+    },
+    idVerified: {
+        type: Boolean,
+        default: false
+    },
+    idVerifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'  // Receptionist who verified
+    },
+    advanceDeposit: {
+        type: Number,
+        default: 0
+    },
+    checkInSlipGenerated: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true

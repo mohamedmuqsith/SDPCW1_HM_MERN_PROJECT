@@ -23,8 +23,13 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['guest', 'staff', 'admin'],
+        enum: ['guest', 'receptionist', 'housekeeping', 'maintenance', 'cleaner', 'staff', 'admin'],
         default: 'guest'
+    },
+    department: {
+        type: String,
+        enum: ['Front Desk', 'Housekeeping', 'Maintenance', 'Kitchen', 'Management', 'None'],
+        default: 'None'
     },
     avatar: {
         type: String,

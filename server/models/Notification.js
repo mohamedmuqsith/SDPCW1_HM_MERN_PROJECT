@@ -15,6 +15,20 @@ const notificationSchema = new mongoose.Schema({
         enum: ['booking', 'service', 'system', 'alert'],
         default: 'system'
     },
+    status: {
+        type: String,
+        enum: ['PENDING', 'SENT', 'FAILED'],
+        default: 'PENDING'
+    },
+    eventKey: {
+        type: String,
+        required: true,
+        unique: true // Anti-duplicate Logic
+    },
+    retryCount: {
+        type: Number,
+        default: 0
+    },
     read: {
         type: Boolean,
         default: false

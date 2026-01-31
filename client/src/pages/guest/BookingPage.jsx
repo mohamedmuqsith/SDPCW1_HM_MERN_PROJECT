@@ -261,18 +261,20 @@ const BookingPage = () => {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle className="w-8 h-8 text-green-600" />
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Shield className="w-8 h-8 text-blue-600" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Booking Confirmed!</h2>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Booking Request Sent</h2>
                     <p className="text-slate-500 mb-6">
-                        Your payment was successful. A confirmation email has been sent to your inbox.
+                        Your payment has been authorized. Your booking is <strong>Pending Approval</strong>.
+                        <br />
+                        You will receive a confirmation email once the administrator approves your stay.
                     </p>
                     <button
-                        onClick={() => navigate('/dashboard')}
-                        className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                        onClick={() => navigate('/')}
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-lg font-bold"
                     >
-                        Go to Dashboard
+                        Return Home
                     </button>
                 </div>
             </div>

@@ -10,23 +10,41 @@ const StaffRegister = () => {
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { register } = useAuth();
+    const { register, getRoleRedirectPath } = useAuth();
     const navigate = useNavigate();
+
+    // Detect role from email (for display purposes)
+    const detectRoleFromEmail = (email) => {
+        const emailLower = email.toLowerCase();
+        if (emailLower.includes('admin')) return 'admin';
+        if (emailLower.includes('receptionist')) return 'receptionist';
+        if (emailLower.includes('cleaner')) return 'cleaner';
+        if (emailLower.includes('housekeeping')) return 'housekeeping';
+        if (emailLower.includes('maintenance')) return 'maintenance';
+        if (emailLower.includes('staff')) return 'staff';
+        return null;
+    };
+
+    const [detectedRole, setDetectedRole] = useState(null);
 
     const validateEmail = (email) => {
         const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!regex.test(email)) {
-            setEmailError('Please enter a valid email address (e.g. name.staff@hotel.com)');
+            setEmailError('Please enter a valid email address (e.g. name.receptionist@gmail.com)');
+            setDetectedRole(null);
             return false;
         }
 
-        // Additional staff-only check
-        if (!email.toLowerCase().includes('staff') && !email.toLowerCase().includes('admin')) {
-            setEmailError("Email must contain the word 'staff'.");
+        // Check for any staff-related keyword
+        const role = detectRoleFromEmail(email);
+        if (!role) {
+            setEmailError("Email must contain a role keyword: 'receptionist', 'housekeeping', 'maintenance', 'staff', or 'admin'.");
+            setDetectedRole(null);
             return false;
         }
 
         setEmailError('');
+        setDetectedRole(role);
         return true;
     };
 
@@ -44,7 +62,7 @@ const StaffRegister = () => {
     const handleEmailChange = (e) => {
         const val = e.target.value;
         setEmail(val);
-        if (emailError) validateEmail(val);
+        validateEmail(val); // Always validate to update detected role
     };
 
     const handlePasswordChange = (e) => {
@@ -67,12 +85,13 @@ const StaffRegister = () => {
         try {
             const userData = await register(name, email, password);
 
-            // Check if the backend actually assigned the staff role
-            if (userData.role === 'staff' || userData.role === 'admin') {
-                navigate('/staff', { replace: true });
+            // Check if the backend assigned a valid staff/admin role
+            const validRoles = ['admin', 'receptionist', 'cleaner', 'housekeeping', 'maintenance', 'staff'];
+            if (validRoles.includes(userData.role)) {
+                const redirectPath = getRoleRedirectPath(userData.role);
+                navigate(redirectPath, { replace: true });
             } else {
-                // Should technically not happen due to frontend email check, but just in case
-                alert("Account created, but 'staff' role was not assigned. You have been redirected to the guest dashboard.");
+                alert("Account created, but staff role was not assigned. Redirecting to guest dashboard.");
                 navigate('/dashboard', { replace: true });
             }
         } catch (error) {
@@ -129,8 +148,8 @@ const StaffRegister = () => {
                             type="email"
                             required
                             className={`block w-full pl-10 sm:text-sm rounded-lg py-2 focus:ring-blue-500 focus:border-blue-500 ${emailError
-                                    ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
-                                    : 'border-slate-300'
+                                ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
+                                : 'border-slate-300'
                                 }`}
                             placeholder="name.staff@hotel.com"
                             value={email}
@@ -147,8 +166,22 @@ const StaffRegister = () => {
                         <p className="mt-2 text-sm text-red-600" id="email-error">
                             {emailError}
                         </p>
+                    ) : detectedRole ? (
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs text-green-600">✓ Role detected:</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${detectedRole === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                detectedRole === 'receptionist' ? 'bg-indigo-100 text-indigo-700' :
+                                    detectedRole === 'housekeeping' ? 'bg-green-100 text-green-700' :
+                                        detectedRole === 'maintenance' ? 'bg-orange-100 text-orange-700' :
+                                            'bg-blue-100 text-blue-700'
+                                }`}>
+                                {detectedRole.charAt(0).toUpperCase() + detectedRole.slice(1)}
+                            </span>
+                        </div>
                     ) : (
-                        <p className="mt-1 text-xs text-blue-500">Must contain 'staff' to be valid.</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                            Include role in email: receptionist, housekeeping, maintenance, staff, or admin
+                        </p>
                     )}
                 </div>
 
@@ -166,8 +199,8 @@ const StaffRegister = () => {
                             type="password"
                             required
                             className={`block w-full pl-10 sm:text-sm rounded-lg py-2 focus:ring-blue-500 focus:border-blue-500 ${passwordError
-                                    ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
-                                    : 'border-slate-300'
+                                ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500'
+                                : 'border-slate-300'
                                 }`}
                             placeholder="••••••••"
                             value={password}

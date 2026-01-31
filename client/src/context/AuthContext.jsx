@@ -104,8 +104,35 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('user');
     };
 
+    // Role-based redirect path helper
+    const getRoleRedirectPath = (role) => {
+        switch (role) {
+            case 'admin':
+                return '/admin';
+            case 'receptionist':
+                return '/receptionist';
+            case 'cleaner':
+            case 'housekeeping': // Redirect to Cleaner Dashboard
+                return '/cleaner';
+            case 'maintenance':
+            case 'staff':
+                return '/staff';
+            default: // guest
+                return '/dashboard';
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, login, register, loginWithGoogle, logout, isAuthenticated: !!user }}>
+        <AuthContext.Provider value={{
+            user,
+            token: user?.token, // Expose token directly
+            login,
+            register,
+            loginWithGoogle,
+            logout,
+            isAuthenticated: !!user,
+            getRoleRedirectPath
+        }}>
             {children}
         </AuthContext.Provider>
     );

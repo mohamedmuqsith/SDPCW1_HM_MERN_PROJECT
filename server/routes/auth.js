@@ -33,6 +33,7 @@ router.post('/register', async (req, res) => {
         }
 
         let role = 'guest'; // Default role
+        const emailLower = email.toLowerCase();
 
         // Check specifically for the demo admin accounts or any email containing "admin"
         if (
@@ -40,12 +41,28 @@ router.post('/register', async (req, res) => {
             email === 'admin123@gmail.com' ||
             email === 'admin@admin.com' ||
             email === 'admin123@admin.com' ||
-            email.toLowerCase().includes('admin')
+            emailLower.includes('admin')
         ) {
             role = 'admin';
         }
-        // Logic to assign staff role if email contains "staff" (Simulation)
-        else if (email.toLowerCase().includes('staff')) {
+        // Receptionist role detection
+        else if (emailLower.includes('receptionist')) {
+            role = 'receptionist';
+        }
+        // Cleaner role detection
+        else if (emailLower.includes('cleaner')) {
+            role = 'cleaner';
+        }
+        // Housekeeping role detection
+        else if (emailLower.includes('housekeeping')) {
+            role = 'housekeeping';
+        }
+        // Maintenance role detection
+        else if (emailLower.includes('maintenance')) {
+            role = 'maintenance';
+        }
+        // General staff role (fallback for any "staff" keyword)
+        else if (emailLower.includes('staff')) {
             role = 'staff';
         }
 

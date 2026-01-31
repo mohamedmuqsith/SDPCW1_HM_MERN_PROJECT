@@ -7,8 +7,11 @@ const StaffLogin = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const { login, getRoleRedirectPath } = useAuth();
     const navigate = useNavigate();
+
+    // Allowed roles for staff portal
+    const allowedRoles = ['staff', 'receptionist', 'cleaner', 'housekeeping', 'maintenance', 'admin'];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -16,9 +19,10 @@ const StaffLogin = () => {
         try {
             const userData = await login(email, password);
 
-            // STRICT ROLE CHECK
-            if (userData.role === 'staff' || userData.role === 'admin') {
-                navigate('/staff', { replace: true });
+            // STRICT ROLE CHECK - Allow all staff-related roles
+            if (allowedRoles.includes(userData.role)) {
+                const redirectPath = getRoleRedirectPath(userData.role);
+                navigate(redirectPath, { replace: true });
             } else {
                 throw new Error("Unauthorized Access: This portal is for Staff only.");
             }

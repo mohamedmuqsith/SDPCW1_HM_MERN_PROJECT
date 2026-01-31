@@ -4,12 +4,14 @@ import { useAuth } from '../../context/AuthContext';
 import { Utensils, SprayCan, Wifi, Truck, BellRing, Loader2 } from 'lucide-react';
 
 const ServiceRequest = () => {
-    const { user } = useAuth(); // Get user from context
+    const { user, token } = useAuth(); // Get user and token from context
     const location = useLocation();
     const [selectedService, setSelectedService] = useState(location.state?.type || 'room_service');
     const [details, setDetails] = useState('');
+    const [preferredTime, setPreferredTime] = useState(''); // New State
     const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
+    const [successMsg, setSuccessMsg] = useState('');
+    const [errorMsg, setErrorMsg] = useState('');
 
     const services = [
         { id: 'room_service', name: 'Room Service', icon: <Utensils className="w-6 h-6" /> },
@@ -19,34 +21,65 @@ const ServiceRequest = () => {
         { id: 'other', name: 'Other Inquiry', icon: <BellRing className="w-6 h-6" /> },
     ];
 
+    // Map frontend service IDs to backend type names
+    const serviceTypeMap = {
+        'room_service': 'Room Service',
+        'housekeeping': 'Housekeeping',
+        'technical': 'Tech Support',
+        'transport': 'Transport',
+        'other': 'Other Inquiry'
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setErrorMsg('');
+        setSuccessMsg('');
 
         try {
+            // Map the service ID to proper backend type name
+            const serviceType = serviceTypeMap[selectedService] || selectedService;
+
+            // Format time with AM/PM if provided
+            let formattedTime = preferredTime;
+            if (preferredTime) {
+                const [hours, minutes] = preferredTime.split(':');
+                const h = parseInt(hours, 10);
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 || 12;
+                formattedTime = `${h12}:${minutes} ${ampm}`;
+            }
+
             const response = await fetch('http://localhost:5000/api/service-requests', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    userId: user.id || user._id, // Handle both ID formats
-                    type: selectedService,
+                    userId: user.id || user._id,
+                    type: serviceType,  // Send proper type name
                     details: details,
-                    roomNumber: '101' // Placeholder or fetch from booking
+                    preferredTime: formattedTime, // Send formatted time
+                    roomNumber: '101'
                 }),
             });
 
+            const data = await response.json();
+
             if (response.ok) {
-                setSuccess(true);
+                setSuccessMsg({ message: data.message, reason: data.reason });
+                // FULL FORM RESET on success
                 setDetails('');
-                setTimeout(() => setSuccess(false), 3000);
+                setPreferredTime(''); // Reset time
+                setSelectedService('room_service'); // Reset to default service
+                setTimeout(() => setSuccessMsg(''), 5000);
             } else {
-                alert('Failed to submit request');
+                setErrorMsg({ message: data.message || 'Failed', reason: data.reason || 'Please try again.' });
             }
         } catch (error) {
             console.error('Request Error:', error);
-            alert('Something went wrong');
+            setErrorMsg({ message: 'Network Error', reason: 'Could not connect to server.' });
         } finally {
             setLoading(false);
         }
@@ -61,10 +94,20 @@ const ServiceRequest = () => {
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
 
-                {success && (
-                    <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center text-green-700 animate-fade-in">
-                        <BellRing className="w-5 h-5 mr-2" />
-                        Request sent successfully! Staff will attend to you shortly.
+                {successMsg && (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex flex-col text-green-700 animate-fade-in">
+                        <div className="flex items-center font-semibold">
+                            <BellRing className="w-5 h-5 mr-2" />
+                            {successMsg.message}
+                        </div>
+                        {successMsg.reason && <div className="ml-7 text-sm opacity-90 mt-1">{successMsg.reason}</div>}
+                    </div>
+                )}
+
+                {errorMsg && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex flex-col text-red-700 animate-fade-in">
+                        <div className="font-semibold">{errorMsg.message}</div>
+                        {errorMsg.reason && <div className="text-sm opacity-90 mt-1">{errorMsg.reason}</div>}
                     </div>
                 )}
 
@@ -105,6 +148,25 @@ const ServiceRequest = () => {
                             required
                         />
                     </div>
+
+                    {/* Time Selection for Housekeeping */}
+                    {selectedService === 'housekeeping' && (
+                        <div className="mb-6 animate-fade-in">
+                            <label htmlFor="time" className="block text-sm font-medium text-slate-700 mb-2">
+                                Preferred Time (Optional)
+                            </label>
+                            <input
+                                type="time"
+                                id="time"
+                                className="w-full md:w-1/2 rounded-lg border-slate-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                                value={preferredTime}
+                                onChange={(e) => setPreferredTime(e.target.value)}
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                Service hours: 8:00 AM - 6:00 PM
+                            </p>
+                        </div>
+                    )}
 
                     <div className="flex justify-end">
                         <button

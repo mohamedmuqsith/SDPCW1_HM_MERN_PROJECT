@@ -1,0 +1,152 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { Calendar, User, DollarSign, Check, X, Clock, UserCheck, LogOut } from 'lucide-react';
+
+const AllBookingsPage = () => {
+    const { token } = useAuth();
+    const [bookings, setBookings] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('all');
+
+    const fetchBookings = async () => {
+        try {
+            const url = filter === 'all'
+                ? 'http://localhost:5000/api/receptionist/bookings'
+                : `http://localhost:5000/api/receptionist/bookings?status=${filter}`;
+
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setBookings(data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch bookings:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (token) fetchBookings();
+    }, [token, filter]);
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Pending Approval': return 'bg-orange-100 text-orange-700';
+            case 'Confirmed': return 'bg-blue-100 text-blue-700';
+            case 'Checked In': return 'bg-green-100 text-green-700';
+            case 'Checked Out': return 'bg-slate-100 text-slate-700';
+            case 'Rejected': return 'bg-red-100 text-red-700';
+            case 'Cancelled': return 'bg-red-100 text-red-700';
+            default: return 'bg-slate-100 text-slate-700';
+        }
+    };
+
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'Pending Approval': return <Clock size={14} />;
+            case 'Confirmed': return <Check size={14} />;
+            case 'Checked In': return <UserCheck size={14} />;
+            case 'Checked Out': return <LogOut size={14} />;
+            case 'Rejected': return <X size={14} />;
+            default: return null;
+        }
+    };
+
+    const statusFilters = ['all', 'Pending Approval', 'Confirmed', 'Checked In', 'Checked Out', 'Rejected'];
+
+    return (
+        <div className="max-w-6xl mx-auto">
+            <header className="mb-8">
+                <h1 className="text-3xl font-bold text-slate-900 flex items-center">
+                    <Calendar className="w-8 h-8 mr-3 text-slate-700" />
+                    All Bookings
+                </h1>
+                <p className="text-slate-500">Complete booking history and management</p>
+            </header>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2 mb-6">
+                {statusFilters.map((status) => (
+                    <button
+                        key={status}
+                        onClick={() => setFilter(status)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filter === status
+                                ? 'bg-slate-900 text-white'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                    >
+                        {status === 'all' ? 'All' : status}
+                    </button>
+                ))}
+            </div>
+
+            {/* Bookings Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                                <th className="text-left p-4 text-xs font-semibold text-slate-500 uppercase">Guest</th>
+                                <th className="text-left p-4 text-xs font-semibold text-slate-500 uppercase">Room</th>
+                                <th className="text-left p-4 text-xs font-semibold text-slate-500 uppercase">Dates</th>
+                                <th className="text-left p-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
+                                <th className="text-right p-4 text-xs font-semibold text-slate-500 uppercase">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="5" className="p-8 text-center text-slate-400">Loading...</td>
+                                </tr>
+                            ) : bookings.length === 0 ? (
+                                <tr>
+                                    <td colSpan="5" className="p-8 text-center text-slate-400 italic">No bookings found.</td>
+                                </tr>
+                            ) : (
+                                bookings.map((booking) => (
+                                    <tr key={booking._id} className="hover:bg-slate-50">
+                                        <td className="p-4">
+                                            <div className="flex items-center">
+                                                <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-bold mr-3">
+                                                    {booking.user?.name?.charAt(0) || 'G'}
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-slate-900">{booking.user?.name || 'Guest'}</p>
+                                                    <p className="text-xs text-slate-400">{booking.user?.email}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className="font-medium">{booking.assignedRoom || booking.roomName}</span>
+                                            <p className="text-xs text-slate-400">{booking.roomType}</p>
+                                        </td>
+                                        <td className="p-4 text-sm">
+                                            <div className="flex items-center text-slate-600">
+                                                <Calendar size={14} className="mr-1" />
+                                                {new Date(booking.checkIn).toLocaleDateString()} - {new Date(booking.checkOut).toLocaleDateString()}
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                                                {getStatusIcon(booking.status)}
+                                                {booking.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <span className="font-bold text-green-600">${booking.totalPrice}</span>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default AllBookingsPage;
