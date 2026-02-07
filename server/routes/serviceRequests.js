@@ -4,6 +4,7 @@ import Notification from '../models/Notification.js';
 import AuditLog from '../models/AuditLog.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 import Booking from '../models/Booking.js';
+import { sendExternalAlert } from './notifications.js';
 
 const router = express.Router();
 
@@ -72,49 +73,27 @@ router.post('/', protect, async (req, res) => {
 
         const room = activeBooking ? (activeBooking.assignedRoom || activeBooking.roomName) : (roomNumber || 'N/A');
 
-        // 2. AUTO-MERGE CHECK: Look for same request (Type + Room) in last 2 mins
+        // 2. DUPLICATE/DEBOUNCE CHECK: Only block EXACT duplicates (Same Type + Same Details)
+        // created within the last 2 minutes. This prevents accidental double-clicks.
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-        console.log(`[DEBUG] Auto-Merge Query: Room=${room}, Type=${normalizedType}, Time>=${twoMinutesAgo}`);
-
-        const duplicateRequest = await ServiceRequest.findOne({
+        const exactDuplicate = await ServiceRequest.findOne({
             roomNumber: room,
             type: normalizedType,
+            details: details, // Exact match on details
             status: 'New',
             createdAt: { $gte: twoMinutesAgo }
         });
 
-        if (duplicateRequest) {
-            console.log('[DEBUG] Auto-Merge Hit:', duplicateRequest._id);
-            // MERGE: Add to notes instead of new request
-            duplicateRequest.notes.push({
-                user: req.user._id,
-                text: `Merged Update: ${details}`
-            });
-            await duplicateRequest.save();
-
-            return res.status(200).json({
-                message: 'Request Updated',
-                reason: 'Added to your existing recent request to avoid duplication.',
-                request: duplicateRequest
-            });
-        }
-
-        // 3. DUPLICATE CHECK (General): Pending request of same type (Pre-existing rule)
-        const existingRequest = await ServiceRequest.findOne({
-            user: req.user._id,
-            type: normalizedType,
-            status: { $in: ['New', 'Assigned', 'In Progress'] }
-        });
-
-        if (existingRequest && !isStaff) {
-            // If duplicate exists but > 2 mins, we verify if we should reject
-            console.log('[DEBUG] Duplicate Request Found:', existingRequest._id);
+        if (exactDuplicate) {
+            console.log('[DEBUG] Exact Duplicate Blocked:', exactDuplicate._id);
             return res.status(400).json({
-                message: 'Request Rejected',
-                reason: `You already have a pending ${normalizedType} request.`,
-                code: 'DUPLICATE_REQUEST'
+                message: 'Request Ignored',
+                reason: 'You just submitted this exact request. Please wait a moment.',
+                code: 'DUPLICATE_IGNORED'
             });
         }
+
+        // 3. CREATE NEW REQUEST (Always create new, never merge)
 
         const request = await ServiceRequest.create({
             user: req.user._id,
@@ -504,6 +483,13 @@ router.put('/:id/status', protect, async (req, res) => {
                 'service',
                 `REQUEST_COMPLETED:${request._id}`
             );
+
+            // EXTERNAL ALERT
+            await sendExternalAlert(
+                await (await import('../models/User.js')).default.findById(request.user),
+                `Service Update: Your request for ${request.type} has been marked as COMPLETED.`,
+                'info'
+            );
         }
 
         await AuditLog.create({
@@ -639,6 +625,61 @@ router.patch('/:id/complete', protect, async (req, res) => {
             message: 'Task completed successfully',
             reason: `${request.type} for Room ${request.roomNumber} marked as done.`,
             request
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+// @route   POST /api/service-requests/schedule-daily
+// @desc    Auto-generate daily cleaning tasks for all occupied rooms
+// @access  Private (Admin/Housekeeping Manager)
+router.post('/schedule-daily', protect, authorize('admin', 'receptionist'), async (req, res) => {
+    try {
+        // 1. Find all currently occupied rooms (Confirmed & Checked In)
+        // actually only CHECKED_IN needs daily cleaning.
+        const occupiedBookings = await Booking.find({
+            status: 'CHECKED_IN'
+        });
+
+        if (occupiedBookings.length === 0) {
+            return res.json({ message: 'No occupied rooms found. No tasks generated.', count: 0 });
+        }
+
+        let taskCount = 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        for (const booking of occupiedBookings) {
+            const roomNum = booking.assignedRoom || booking.roomName;
+
+            // Check if task already exists for today
+            const existingTask = await ServiceRequest.findOne({
+                roomNumber: roomNum,
+                type: 'Cleaning',
+                createdAt: { $gte: today }
+            });
+
+            if (!existingTask) {
+                await ServiceRequest.create({
+                    user: req.user._id, // Initiated by Admin/System
+                    booking: booking._id,
+                    type: 'Cleaning',
+                    details: 'Daily Housekeeping Service',
+                    priority: 'Medium',
+                    status: 'New',
+                    roomNumber: roomNum,
+                    department: 'Housekeeping'
+                });
+                taskCount++;
+            }
+        }
+
+        res.json({
+            message: `Daily schedule generated. Created ${taskCount} new cleaning tasks.`,
+            count: taskCount,
+            totalOccupied: occupiedBookings.length
         });
     } catch (error) {
         console.error(error);

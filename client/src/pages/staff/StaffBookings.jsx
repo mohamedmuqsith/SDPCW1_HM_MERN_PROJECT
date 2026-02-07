@@ -6,11 +6,14 @@ const StaffBookings = () => {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(null); // Track which booking is being actioned
-    const { user } = useAuth();
+    const { user, token } = useAuth();
 
     const fetchBookings = async () => {
+        if (!token) return;
         try {
-            const response = await fetch('http://localhost:5000/api/bookings?role=staff');
+            const response = await fetch('http://localhost:5000/api/bookings?role=staff', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (response.ok) {
                 const data = await response.json();
                 setBookings(data);
@@ -31,7 +34,10 @@ const StaffBookings = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${bookingId}/checkin`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ staffEmail: user?.email || 'Staff' })
             });
 
@@ -54,7 +60,10 @@ const StaffBookings = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${bookingId}/checkout`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ staffEmail: user?.email || 'Staff' })
             });
 

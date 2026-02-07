@@ -33,13 +33,16 @@ export const authorize = (...roles) => {
             return res.status(401).json({ message: 'Not authorized, user not found' });
         }
 
-        if (!roles.includes(req.user.role)) {
+        const userRole = req.user.role.toUpperCase();
+        const allowedRoles = roles.map(r => r.toUpperCase());
+
+        if (!allowedRoles.includes(userRole)) {
             // AUDIT LOG: Unauthorized access attempt
             try {
                 await AuditLog.create({
                     user: req.user.email || req.user._id,
                     action: 'UNAUTHORIZED_ACCESS_ATTEMPT',
-                    details: `Role '${req.user.role}' attempted to access ${req.method} ${req.originalUrl}. Required: ${roles.join(', ')}`,
+                    details: `Role '${userRole}' attempted to access ${req.method} ${req.originalUrl}. Required: ${allowedRoles.join(', ')}`,
                     ipAddress: req.ip || 'unknown'
                 });
             } catch (logError) {
@@ -47,8 +50,8 @@ export const authorize = (...roles) => {
             }
 
             return res.status(403).json({
-                message: `Access denied. Your role '${req.user.role}' is not authorized.`,
-                requiredRoles: roles,
+                message: `Access denied. Your role '${userRole}' is not authorized.`,
+                requiredRoles: allowedRoles,
                 code: 'FORBIDDEN'
             });
         }

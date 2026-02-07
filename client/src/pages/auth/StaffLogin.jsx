@@ -11,7 +11,7 @@ const StaffLogin = () => {
     const navigate = useNavigate();
 
     // Allowed roles for staff portal
-    const allowedRoles = ['staff', 'receptionist', 'cleaner', 'housekeeping', 'maintenance', 'admin'];
+    const allowedRoles = ['STAFF', 'RECEPTIONIST', 'CLEANER', 'HOUSEKEEPING', 'MAINTENANCE', 'ADMIN'];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -20,7 +20,7 @@ const StaffLogin = () => {
             const userData = await login(email, password);
 
             // STRICT ROLE CHECK - Allow all staff-related roles
-            if (allowedRoles.includes(userData.role)) {
+            if (allowedRoles.includes(userData.role.toUpperCase())) {
                 const redirectPath = getRoleRedirectPath(userData.role);
                 navigate(redirectPath, { replace: true });
             } else {

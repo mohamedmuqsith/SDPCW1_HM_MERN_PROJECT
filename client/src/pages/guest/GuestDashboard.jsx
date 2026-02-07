@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, MapPin, CreditCard, Bell } from 'lucide-react';
+import RescheduleModal from '../../components/guest/RescheduleModal';
 
 const GuestDashboard = () => {
     const { user, token } = useAuth();
@@ -33,6 +34,8 @@ const GuestDashboard = () => {
                             address: b.address || '123 Main St, Metropolis', // Fallback
                             checkIn: new Date(b.checkIn).toLocaleDateString(),
                             checkOut: new Date(b.checkOut).toLocaleDateString(),
+                            checkInRaw: b.checkIn, // ISO String for editing
+                            checkOutRaw: b.checkOut, // ISO String for editing
                             status: b.status,
                             image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?ixlib=rb-4.0.3&auto=format&fit=crop&w=1074&q=80'
                         })));
@@ -102,6 +105,49 @@ const GuestDashboard = () => {
         }
     };
 
+    // Modal State
+    const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+    const [selectedBooking, setSelectedBooking] = useState(null);
+
+    const handleCancelBooking = async (bookingId) => {
+        if (!window.confirm('Are you sure you want to cancel this booking? This action cannot be undone.')) return;
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/bookings/${bookingId}/cancel`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId: user.id || user._id })
+            });
+
+            if (res.ok) {
+                alert('Booking Cancelled');
+                // Refresh list logic here or force reload
+                window.location.reload();
+            } else {
+                const data = await res.json();
+                alert(`Error: ${data.message}`);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Failed to cancel booking');
+        }
+    };
+
+    const openReschedule = (booking) => {
+        // Parse date strings back to YYYY-MM-DD for input
+        // booking.checkIn is "M/D/YYYY" from locale string options
+        // We need pure date object or ISO string. 
+        // Ideally we should store raw ISO in state and format in UI only.
+        // For now, let's just pass the booking object and let Modal handle or re-fetch activeBookings with raw data.
+        // Actually activeBookings maps dates to localeString. We should probably keep raw too.
+        // Lets fix the activeBookings map in useEffect to keep raw dates.
+        setSelectedBooking(booking);
+        setRescheduleModalOpen(true);
+    };
+
     const getStatusStyle = (status) => {
         switch (status) {
             case 'PENDING_APPROVAL': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
@@ -117,9 +163,12 @@ const GuestDashboard = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Welcome Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900">Hello, {user?.name || 'Guest'} 👋</h1>
-                <p className="text-slate-500 mt-2">Here's what's happening with your stay.</p>
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900">Hello, {user?.name || 'Guest'} 👋</h1>
+                    <p className="text-slate-500 mt-2">Here's what's happening with your stay.</p>
+                </div>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -200,8 +249,39 @@ const GuestDashboard = () => {
                                         </div>
                                     )}
 
-                                    <div className="mt-4 flex gap-3">
-                                        {/* Actions removed/simplified as inline request is added above */}
+                                    <div className="mt-4 flex flex-wrap gap-3 pt-4 border-t border-slate-100">
+                                        {(booking.status === 'PENDING_APPROVAL' || booking.status === 'CONFIRMED') && (
+                                            <>
+                                                <button
+                                                    onClick={() => openReschedule(booking)}
+                                                    className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100"
+                                                >
+                                                    Modify Dates
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCancelBooking(booking.id)}
+                                                    className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100"
+                                                >
+                                                    Cancel Booking
+                                                </button>
+                                            </>
+                                        )}
+                                        {booking.status === 'CONFIRMED' && (
+                                            <button
+                                                onClick={() => alert("Online Check-in initiated! Please arrive at reception for key collection.")}
+                                                className="text-xs font-bold text-green-700 hover:text-green-900 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center"
+                                            >
+                                                <Clock className="w-3 h-3 mr-1" /> Online Check-in
+                                            </button>
+                                        )}
+                                        {(booking.status === 'CHECKED_IN' || booking.status === 'CHECKED_OUT') && (
+                                            <button
+                                                onClick={() => alert("Opening Invoice... (This would open a PDF or Modal)")}
+                                                className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center"
+                                            >
+                                                <CreditCard className="w-3 h-3 mr-1" /> View Bill
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -271,6 +351,16 @@ const GuestDashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Reschedule Modal */}
+            {rescheduleModalOpen && selectedBooking && (
+                <RescheduleModal
+                    isOpen={rescheduleModalOpen}
+                    onClose={() => setRescheduleModalOpen(false)}
+                    booking={selectedBooking}
+                    onUpdate={() => window.location.reload()}
+                />
+            )}
         </div>
     );
 };

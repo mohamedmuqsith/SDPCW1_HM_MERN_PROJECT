@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Loader2, X, Phone, Mail, DollarSign } from 'lucide-react';
 
+import { useAuth } from '../../context/AuthContext';
+
 const StaffManagement = () => {
+    const { token } = useAuth();
     const [staffList, setStaffList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -18,7 +21,9 @@ const StaffManagement = () => {
 
     const fetchStaff = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/staff');
+            const response = await fetch('http://localhost:5000/api/staff', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (response.ok) {
                 const data = await response.json();
                 setStaffList(data);
@@ -45,7 +50,10 @@ const StaffManagement = () => {
 
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(formData)
             });
 
@@ -63,7 +71,10 @@ const StaffManagement = () => {
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to remove this staff member?')) return;
         try {
-            await fetch(`http://localhost:5000/api/staff/${id}`, { method: 'DELETE' });
+            await fetch(`http://localhost:5000/api/staff/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             fetchStaff();
         } catch (error) {
             console.error('Error removing staff:', error);
@@ -116,52 +127,54 @@ const StaffManagement = () => {
                 </button>
             </div>
 
-            <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name/Contact</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Role</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dept</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
-                    {staffList.map((staff) => (
-                        <tr key={staff._id}>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                    <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-                                        {staff.name.charAt(0)}
-                                    </div>
-                                    <div className="ml-4">
-                                        <div className="text-sm font-medium text-slate-900">{staff.name}</div>
-                                        <div className="text-xs text-slate-500 flex items-center gap-1"><Mail size={10} /> {staff.email}</div>
-                                        <div className="text-xs text-slate-500 flex items-center gap-1"><Phone size={10} /> {staff.phone}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">{staff.position}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{staff.department}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                    ${staff.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                    {staff.status}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button onClick={() => openModal(staff)} className="text-blue-600 hover:text-blue-900 mr-3"><Edit2 size={18} /></button>
-                                <button onClick={() => handleDelete(staff._id)} className="text-red-600 hover:text-red-900"><Trash2 size={18} /></button>
-                            </td>
-                        </tr>
-                    ))}
-                    {staffList.length === 0 && (
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
                         <tr>
-                            <td colSpan="5" className="px-6 py-12 text-center text-slate-500">No staff members found. Hire someone!</td>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name/Contact</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Role</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dept</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-200">
+                        {staffList.map((staff) => (
+                            <tr key={staff._id}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+                                            {staff.name.charAt(0)}
+                                        </div>
+                                        <div className="ml-4">
+                                            <div className="text-sm font-medium text-slate-900">{staff.name}</div>
+                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Mail size={10} /> {staff.email}</div>
+                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Phone size={10} /> {staff.phone}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">{staff.position}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{staff.department}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                    ${staff.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        {staff.status}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button onClick={() => openModal(staff)} className="text-blue-600 hover:text-blue-900 mr-3"><Edit2 size={18} /></button>
+                                    <button onClick={() => handleDelete(staff._id)} className="text-red-600 hover:text-red-900"><Trash2 size={18} /></button>
+                                </td>
+                            </tr>
+                        ))}
+                        {staffList.length === 0 && (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center text-slate-500">No staff members found. Hire someone!</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
             {/* Modal */}
             {isModalOpen && (

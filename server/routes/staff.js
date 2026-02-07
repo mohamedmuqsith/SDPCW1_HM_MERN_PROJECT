@@ -47,11 +47,11 @@ router.post('/', async (req, res) => {
                 name,
                 email,
                 password: 'Staff123!', // Default password for new staff
-                role: 'staff'        // Explicitly set role to staff
+                role: 'STAFF'        // Explicitly set role to staff
             });
         } else {
             // If user exists (e.g. was guest), upgrade role to staff
-            userExists.role = 'staff';
+            userExists.role = 'STAFF';
             await userExists.save();
         }
 

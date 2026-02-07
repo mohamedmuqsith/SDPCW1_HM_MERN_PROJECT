@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { CheckCircle, Clock, AlertCircle, AlertTriangle, RefreshCcw, Filter } from 'lucide-react';
 
 const StaffDashboard = () => {
-    const { token } = useAuth();
+    const { user, token } = useAuth();
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // all, my, unassigned
@@ -127,13 +127,16 @@ const StaffDashboard = () => {
 
     return (
         <div className="max-w-5xl mx-auto">
-            <header className="mb-8 flex justify-between items-end">
+            <header className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900">Staff Dashboard</h1>
                     <p className="text-slate-500">Real-time Operations Console</p>
                 </div>
-                <div className="flex items-center text-xs text-slate-400">
-                    <RefreshCcw size={12} className="mr-1 animate-spin-slow" /> Auto-updates every 15s
+                <div className="flex flex-col items-end gap-2">
+
+                    <div className="flex items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <RefreshCcw size={12} className="mr-1 animate-spin-slow" /> Auto-updates every 15s
+                    </div>
                 </div>
             </header>
 

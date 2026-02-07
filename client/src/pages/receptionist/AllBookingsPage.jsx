@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Calendar, User, DollarSign, Check, X, Clock, UserCheck, LogOut } from 'lucide-react';
+import { Calendar, User, DollarSign, Check, X, Clock, UserCheck, LogOut, BedDouble } from 'lucide-react';
+import AllocationModal from '../../components/receptionist/AllocationModal';
 
 const AllBookingsPage = () => {
     const { token } = useAuth();
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [isAllocationModalOpen, setIsAllocationModalOpen] = useState(false);
 
     const fetchBookings = async () => {
         try {
@@ -31,6 +34,35 @@ const AllBookingsPage = () => {
     useEffect(() => {
         if (token) fetchBookings();
     }, [token, filter]);
+
+    const handleAllocateClick = (booking) => {
+        setSelectedBooking(booking);
+        setIsAllocationModalOpen(true);
+    };
+
+    const handleAllocationSubmit = async (bookingId, roomNumber) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/receptionist/bookings/${bookingId}/allocate`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ roomNumber })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                alert(`✓ Room ${roomNumber} allocated successfully!`);
+                setIsAllocationModalOpen(false);
+                fetchBookings();
+            } else {
+                alert(`✗ Failed: ${data.message || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Allocation error:', error);
+            alert('Failed to connect to server');
+        }
+    };
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -101,16 +133,17 @@ const AllBookingsPage = () => {
                                 <th className="text-left p-4 text-xs font-semibold text-slate-500 uppercase">Dates</th>
                                 <th className="text-left p-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
                                 <th className="text-right p-4 text-xs font-semibold text-slate-500 uppercase">Amount</th>
+                                <th className="text-right p-4 text-xs font-semibold text-slate-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="5" className="p-8 text-center text-slate-400">Loading...</td>
+                                    <td colSpan="6" className="p-8 text-center text-slate-400">Loading...</td>
                                 </tr>
                             ) : bookings.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="p-8 text-center text-slate-400 italic">No bookings found.</td>
+                                    <td colSpan="6" className="p-8 text-center text-slate-400 italic">No bookings found.</td>
                                 </tr>
                             ) : (
                                 bookings.map((booking) => (
@@ -145,6 +178,17 @@ const AllBookingsPage = () => {
                                         <td className="p-4 text-right">
                                             <span className="font-bold text-green-600">${booking.totalPrice}</span>
                                         </td>
+                                        <td className="p-4 text-right">
+                                            {(booking.status === 'CONFIRMED' || booking.status === 'CHECKED_IN') && (
+                                                <button
+                                                    onClick={() => handleAllocateClick(booking)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Allocate Room"
+                                                >
+                                                    <BedDouble size={18} />
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -152,6 +196,13 @@ const AllBookingsPage = () => {
                     </table>
                 </div>
             </div>
+
+            <AllocationModal
+                isOpen={isAllocationModalOpen}
+                onClose={() => setIsAllocationModalOpen(false)}
+                booking={selectedBooking}
+                onAllocate={handleAllocationSubmit}
+            />
         </div>
     );
 };

@@ -28,7 +28,8 @@ const paymentSchema = new mongoose.Schema({
     },
     idempotencyKey: {
         type: String,
-        unique: true
+        unique: true,
+        sparse: true
     },
     paymentMethod: {
         type: String, // e.g., 'credit_card'

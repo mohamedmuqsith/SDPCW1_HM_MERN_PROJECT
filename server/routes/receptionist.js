@@ -6,6 +6,7 @@ import ServiceRequest from '../models/ServiceRequest.js';
 import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
 import Notification from '../models/Notification.js';
+import { sendExternalAlert } from './notifications.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -102,6 +103,15 @@ router.put('/bookings/:id/approve', receptionistAuth, async (req, res) => {
             });
         } catch (e) { console.log('Notification Error:', e.message); }
 
+        // Notify Guest (EXTERNAL - SMS/EMAIL)
+        if (booking.user) {
+            await sendExternalAlert(
+                booking.user,
+                `Great news! Your stay at ${booking.hotelName || 'our hotel'} is CONFIRMED. Check-in is on ${new Date(booking.checkIn).toLocaleDateString()}.`,
+                'URGENT'
+            );
+        }
+
         res.json({
             message: 'Booking Approved',
             reason: `Booking confirmed for ${booking.user?.name || 'Guest'}. ${assignedRoom ? `Room ${assignedRoom} assigned.` : ''} Guest can check-in from ${new Date(booking.checkIn).toLocaleDateString()}.`,
@@ -161,9 +171,55 @@ router.put('/bookings/:id/reject', receptionistAuth, async (req, res) => {
             });
         } catch (e) { console.log('Notification Error:', e.message); }
 
+        // Notify Guest (EXTERNAL - SMS/EMAIL)
+        if (booking.user) {
+            await sendExternalAlert(
+                booking.user,
+                `Update on your booking: ${reason || 'Unfortunately, we could not confirm your reservation at this time.'}`,
+                'URGENT'
+            );
+        }
+
         res.json({
             message: 'Booking Rejected',
             reason: reason || 'Booking has been declined.',
+            booking
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+// @route   PUT /api/receptionist/bookings/:id/allocate
+// @desc    Manually allocate or swap room for a booking
+// @access  Receptionist, Admin
+router.put('/bookings/:id/allocate', receptionistAuth, async (req, res) => {
+    try {
+        const { roomNumber } = req.body;
+        const booking = await Booking.findById(req.params.id);
+
+        if (!booking) {
+            return res.status(404).json({ message: 'Booking not found' });
+        }
+
+        // Check if room exists and is available (Optional strict check, or allow override)
+        // ideally we should check if room is occupied by another booking overlapping dates
+        // For MVP, we'll just update the assignedRoom field.
+
+        const oldRoom = booking.assignedRoom || booking.roomName;
+        booking.assignedRoom = roomNumber;
+        await booking.save();
+
+        await AuditLog.create({
+            user: req.user.email,
+            action: 'ROOM_ALLOCATION',
+            details: `Allocated Room ${roomNumber} to Booking ${booking._id} (Was: ${oldRoom})`,
+            ipAddress: req.ip
+        });
+
+        res.json({
+            message: 'Room Allocated Successfully',
             booking
         });
     } catch (error) {

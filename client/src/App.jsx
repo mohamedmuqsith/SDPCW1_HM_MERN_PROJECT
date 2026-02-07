@@ -15,6 +15,7 @@ import GuestDashboard from './pages/guest/GuestDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ServiceRequest from './pages/guest/ServiceRequest';
 import HotelsList from './pages/guest/HotelsList';
+import EventHalls from './pages/guest/EventHalls';
 import AdminLayout from './components/admin/AdminLayout';
 import BookingManagement from './pages/admin/BookingManagement';
 import RoomManagement from './pages/admin/RoomManagement';
@@ -22,6 +23,8 @@ import UserManagement from './pages/admin/UserManagement';
 import StaffManagement from './pages/admin/StaffManagement';
 import Reports from './pages/admin/Reports';
 import ServiceManagement from './pages/admin/ServiceManagement';
+import ShiftRoster from './pages/admin/ShiftRoster';
+import HotelManagement from './pages/admin/HotelManagement';
 import StaffDashboard from './pages/staff/StaffDashboard';
 import StaffLayout from './components/admin/StaffLayout';
 import StaffLogin from './pages/auth/StaffLogin';
@@ -55,6 +58,7 @@ function App() {
             <Route path="rooms" element={<RoomSearch />} />
             <Route path="book/:roomId" element={<BookingPage />} />
             <Route path="services" element={<Services />} />
+            <Route path="events" element={<EventHalls />} />
             <Route path="contact" element={<Contact />} />
           </Route>
 
@@ -68,7 +72,7 @@ function App() {
 
           {/* Guest Protected Routes */}
           <Route path="/dashboard" element={
-            <PrivateRoute allowedRoles={['guest', 'admin', 'staff', 'receptionist']}>
+            <PrivateRoute allowedRoles={['GUEST', 'ADMIN', 'STAFF', 'RECEPTIONIST', 'HOUSEKEEPING', 'MAINTENANCE', 'CLEANER']}>
               <MainLayout />
             </PrivateRoute>
           }>
@@ -79,7 +83,7 @@ function App() {
 
           {/* Staff Protected Routes (Housekeeping, Maintenance, Cleaner) */}
           <Route path="/staff" element={
-            <PrivateRoute allowedRoles={['staff', 'housekeeping', 'maintenance', 'cleaner', 'admin']}>
+            <PrivateRoute allowedRoles={['STAFF', 'HOUSEKEEPING', 'MAINTENANCE', 'CLEANER', 'ADMIN']}>
               <StaffLayout />
             </PrivateRoute>
           }>
@@ -91,7 +95,7 @@ function App() {
 
           {/* Receptionist Protected Routes */}
           <Route path="/receptionist" element={
-            <PrivateRoute allowedRoles={['receptionist', 'admin']}>
+            <PrivateRoute allowedRoles={['RECEPTIONIST', 'ADMIN']}>
               <ReceptionistLayout />
             </PrivateRoute>
           }>
@@ -104,14 +108,14 @@ function App() {
 
           {/* Cleaner Protected Routes */}
           <Route path="/cleaner" element={
-            <PrivateRoute allowedRoles={['cleaner', 'housekeeping', 'admin']}>
+            <PrivateRoute allowedRoles={['CLEANER', 'HOUSEKEEPING', 'ADMIN']}>
               <CleanerDashboard />
             </PrivateRoute>
           } />
 
           {/* Admin Protected Routes */}
           <Route path="/admin" element={
-            <PrivateRoute allowedRoles={['admin']}>
+            <PrivateRoute allowedRoles={['ADMIN']}>
               <AdminLayout />
             </PrivateRoute>
           }>
@@ -121,7 +125,9 @@ function App() {
             <Route path="users" element={<UserManagement />} />
             <Route path="staff" element={<StaffManagement />} />
             <Route path="services" element={<ServiceManagement />} />
+            <Route path="roster" element={<ShiftRoster />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="hotels" element={<HotelManagement />} />
           </Route>
 
           <Route path="/unauthorized" element={<Unauthorized />} />

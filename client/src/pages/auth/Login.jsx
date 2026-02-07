@@ -15,9 +15,16 @@ const Login = () => {
     const from = location.state?.from?.pathname || '/dashboard';
 
     const handleRedirect = (userData) => {
-        // Use centralized role-based redirect
-        const redirectPath = getRoleRedirectPath(userData.role);
-        navigate(redirectPath, { replace: true });
+        // If staff members use the main login portal, they likely want to book/use guest services
+        if (
+            ['STAFF', 'HOUSEKEEPING', 'MAINTENANCE', 'CLEANER'].includes(userData.role.toUpperCase())
+        ) {
+            navigate('/dashboard', { replace: true });
+        } else {
+            // Use centralized role-based redirect for admins, receptionists, and guests
+            const redirectPath = getRoleRedirectPath(userData.role);
+            navigate(redirectPath, { replace: true });
+        }
     };
 
     const validateEmail = (email) => {

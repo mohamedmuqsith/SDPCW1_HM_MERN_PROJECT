@@ -1,475 +1,402 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
-import User from '../models/User.js';
-import AuditLog from '../models/AuditLog.js';
-import Notification from '../models/Notification.js';
-import ServiceRequest from '../models/ServiceRequest.js';
+import RoomInventory from '../models/RoomInventory.js';
+import { protect, authorize } from '../middleware/authMiddleware.js';
+import { getDatesInRange } from '../utils/dateRange.js';
+import Payment from '../models/Payment.js';
 
 const router = express.Router();
 
-const BOOKING_CONFIG = {
-    MAX_BOOKING_DAYS: 30,
-    MIN_BOOKING_DAYS: 1,
+/**
+ * HELPER: Check for booking conflicts using RoomInventory
+ * This uses the unique index { roomNumber: 1, date: 1 } to detect overlaps.
+ */
+const checkConflict = async (roomNumber, checkIn, checkOut, excludeBookingId = null) => {
+    const dates = getDatesInRange(checkIn, checkOut);
+    const query = {
+        roomNumber,
+        date: { $in: dates }
+    };
+    if (excludeBookingId) {
+        query.bookingId = { $ne: excludeBookingId };
+    }
+    const conflict = await RoomInventory.findOne(query);
+    return conflict;
 };
 
-// ... (keep validateBookingDates and generateTransactionId helpers) ...
-const validateBookingDates = (checkInStr, checkOutStr) => {
-    const checkInDate = new Date(checkInStr + 'T12:00:00');
-    const checkOutDate = new Date(checkOutStr + 'T12:00:00');
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
-        return { valid: false, error: 'Invalid date format. Please use YYYY-MM-DD format.' };
-    }
-
-    const checkInDateOnly = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate());
-
-    if (checkInDateOnly < today) {
-        return { valid: false, error: `Selected check-in date has already passed.` };
-    }
-
-    if (checkOutDate <= checkInDate) {
-        return { valid: false, error: 'Check-out date must be after check-in date.' };
-    }
-
-    const diffTime = checkOutDate.getTime() - checkInDate.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < BOOKING_CONFIG.MIN_BOOKING_DAYS) {
-        return { valid: false, error: `Minimum booking duration is ${BOOKING_CONFIG.MIN_BOOKING_DAYS} night(s).` };
-    }
-
-    if (diffDays > BOOKING_CONFIG.MAX_BOOKING_DAYS) {
-        return { valid: false, error: `Maximum booking is ${BOOKING_CONFIG.MAX_BOOKING_DAYS} days.` };
-    }
-
-    return { valid: true, nights: diffDays };
-};
-
-const generateTransactionId = () => `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
+// @desc    Create a new booking (Standardized)
 // @route   POST /api/bookings
-// @desc    1. BOOKING PHASE: Pending Approval, Authorized Payment, Proforma Invoice
-router.post('/', async (req, res) => {
+// @access  Private
+router.post('/', protect, async (req, res) => {
+    let inventoryClaimed = false;
+    let dates = [];
     try {
-        const { userId, roomName, roomType, checkIn, checkOut, totalPrice, idempotencyKey } = req.body;
+        const { roomName, checkIn, checkOut, roomType, totalPrice, hotelName } = req.body;
 
-        if (userId && !mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: 'Invalid User ID format.' });
+        // 1. Validate dates
+        const start = new Date(checkIn);
+        const end = new Date(checkOut);
+        if (end <= start) {
+            return res.status(400).json({ message: 'Check-out must be after check-in.' });
         }
 
-        const dateValidation = validateBookingDates(checkIn, checkOut);
-        if (!dateValidation.valid) {
-            return res.status(400).json({ message: dateValidation.error });
-        }
+        dates = getDatesInRange(checkIn, checkOut);
 
-        // DOUBLE BOOKING PREVENTION (Overlap Check)
-        // Check if there is any booking for this room that overlaps with requested dates
-        // And is NOT Cancelled or Rejected
-        // Overlap Logic: (StartA < EndB) && (EndA > StartB)
-        const conflictBooking = await Booking.findOne({
-            roomName: roomName, // Ensure we check the specific room
-            status: { $nin: ['CANCELLED', 'REJECTED'] }, // Ignore cancelled bookings
-            $or: [
-                {
-                    checkIn: { $lt: new Date(checkOut) },
-                    checkOut: { $gt: new Date(checkIn) }
-                }
-            ]
-        });
-
-        if (conflictBooking) {
-            return res.status(400).json({
-                message: `Room '${roomName}' is not available for these dates. It is already booked from ${new Date(conflictBooking.checkIn).toLocaleDateString()} to ${new Date(conflictBooking.checkOut).toLocaleDateString()}.`
-            });
-        }
-
-        // Idempotency Check
-        if (idempotencyKey) {
-            const existingPayment = await import('../models/Payment.js').then(m => m.default.findOne({ idempotencyKey }));
-            if (existingPayment) {
-                return res.status(409).json({ message: 'Duplicate request.', payment: existingPayment });
-            }
-        }
-
-        // Create Payment (AUTHORIZED only - No money taken yet)
-        const Payment = (await import('../models/Payment.js')).default;
-        const newPayment = new Payment({
-            booking: new mongoose.Types.ObjectId(),
-            amount: totalPrice,
-            advanceAmount: 0, // No deposit for now, logic can be added later
-            status: 'Authorized',
-            transactionId: generateTransactionId(),
-            idempotencyKey: idempotencyKey || generateTransactionId(),
-        });
-        await newPayment.save();
-
-        // Create Booking (PENDING APPROVAL)
-        const newBooking = new Booking({
-            _id: newPayment.booking,
-            user: userId,
+        // 2. Create Preliminary Booking (Status: PENDING_APPROVAL)
+        const booking = new Booking({
+            user: req.user._id,
             roomName,
+            hotelName: hotelName || 'Central Hotel',
             roomType,
             checkIn,
             checkOut,
             totalPrice,
-            status: 'PENDING_APPROVAL',
-            payment: newPayment._id
+            status: 'PENDING_APPROVAL'
         });
-        await newBooking.save();
 
-        // NOTIFICATION: Booking Created (Pending)
+        // 3. Atomically Claim Inventory Records
+        // This is the "Lock" mechanism. If any record already exists, it throws 11000
+        const inventoryRecords = dates.map(date => ({
+            hotelName: booking.hotelName,
+            roomNumber: roomName,
+            date,
+            bookingId: booking._id,
+            status: 'PENDING_APPROVAL'
+        }));
+
         try {
-            await Notification.create({
-                user: userId,
-                message: `Booking received for ${roomName}. Waiting for Admin Approval.`,
-                type: 'booking',
-                status: 'PENDING',
-                eventKey: `BOOKING_CREATED:${newBooking._id}`
-            });
-        } catch (e) {
-            console.log('Notification Error', e.message);
+            await RoomInventory.insertMany(inventoryRecords, { ordered: true });
+            inventoryClaimed = true;
+        } catch (error) {
+            if (error.code === 11000) {
+                return res.status(409).json({
+                    message: "Room is not available for selected dates.",
+                    conflictDetails: { room: roomName, range: `${checkIn} to ${checkOut}` }
+                });
+            }
+            throw error;
         }
 
-        // Create Proforma Invoice
-        const Invoice = (await import('../models/Invoice.js')).default;
-        const newInvoice = new Invoice({
-            booking: newBooking._id,
-            type: 'Proforma',
-            totalAmount: totalPrice,
-            items: [
-                { description: `Estimated Stay: ${roomName} (${dateValidation.nights} nights)`, amount: totalPrice }
-            ]
-        });
-        await newInvoice.save();
-
-        newBooking.invoices.push(newInvoice._id);
-        await newBooking.save();
-
-        await AuditLog.create({
-            user: userId || 'Guest',
-            action: 'Booking Request',
-            details: `Booking ${newBooking._id} requested. Status: PENDING_APPROVAL.`,
-            ipAddress: req.ip || '127.0.0.1'
-        });
-
-        res.status(201).json({
-            message: 'Booking request sent. Waiting for Admin Approval.',
-            booking: newBooking
-        });
+        await booking.save();
+        res.status(201).json(booking);
 
     } catch (error) {
-        console.error(error);
+        console.error('Booking Creation Error:', error);
+        // Rollback inventory if booking save failed
+        if (inventoryClaimed) {
+            // Find manually since booking._id might not have been fully saved but exists on object
+            await RoomInventory.deleteMany({ bookingId: booking._id });
+        }
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
-// @route   GET /api/bookings
-router.get('/', async (req, res) => {
+// @desc    Modify booking dates (Standardized)
+// @route   PATCH /api/bookings/:id/dates
+// @access  Private
+router.patch('/:id/dates', protect, async (req, res) => {
     try {
-        const userId = req.query.userId;
-        const role = req.query.role;
-        let bookings;
-        if (role === 'admin' || role === 'staff') {
-            bookings = await Booking.find().populate('user', 'name email').sort({ createdAt: -1 });
-        } else if (userId) {
-            bookings = await Booking.find({ user: userId }).sort({ createdAt: -1 });
-        } else {
-            return res.status(400).json({ message: 'User ID or Role required' });
+        const { checkIn, checkOut } = req.body;
+        const booking = await Booking.findById(req.params.id);
+
+        if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+
+        // 0. Permission & Status check
+        if (booking.user.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+            return res.status(403).json({ message: 'Not authorized.' });
         }
-        res.json(bookings);
+
+        const EDITABLE_STATUSES = ['PENDING_APPROVAL', 'CONFIRMED'];
+        if (!EDITABLE_STATUSES.includes(booking.status)) {
+            return res.status(400).json({ message: `Cannot reschedule booking in ${booking.status} status.` });
+        }
+
+        // 0.1 Date validation
+        const start = new Date(checkIn);
+        const end = new Date(checkOut);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return res.status(400).json({ message: 'Invalid dates provided.' });
+        }
+        if (end <= start) {
+            return res.status(400).json({ message: 'Check-out must be after check-in.' });
+        }
+
+        // 1. Temporarily release old inventory
+        const oldDates = getDatesInRange(booking.checkIn, booking.checkOut);
+        const oldStatus = booking.status;
+        await RoomInventory.deleteMany({ bookingId: booking._id });
+
+        // 2. Try to claim new dates
+        const newDates = getDatesInRange(checkIn, checkOut);
+        const inventoryRecords = newDates.map(date => ({
+            hotelName: booking.hotelName || 'Central Hotel',
+            roomNumber: booking.roomName,
+            date,
+            bookingId: booking._id,
+            status: 'PENDING_APPROVAL' // Force to pending for re-approval or keep same? Usually needs re-approval
+        }));
+
+        try {
+            if (inventoryRecords.length > 0) {
+                await RoomInventory.insertMany(inventoryRecords);
+            }
+
+            // 3. Update booking
+            booking.checkIn = checkIn;
+            booking.checkOut = checkOut;
+            // If it was confirmed, maybe it needs re-approval because dates changed?
+            // For now, let's keep it in PENDING_APPROVAL after reschedule for safety.
+            booking.status = 'PENDING_APPROVAL';
+            await booking.save();
+
+            res.json(booking);
+        } catch (error) {
+            // Restore old inventory if new fails
+            console.warn('Reschedule conflict or error, restoring inventory:', error.message);
+
+            const restoredRecords = oldDates.map(date => ({
+                hotelName: booking.hotelName || 'Central Hotel',
+                roomNumber: booking.roomName,
+                date,
+                bookingId: booking._id,
+                status: oldStatus === 'CHECKED_IN' ? 'CHECKED_IN' : oldStatus // Safety check
+            }));
+
+            if (restoredRecords.length > 0) {
+                try {
+                    await RoomInventory.insertMany(restoredRecords);
+                } catch (restoreErr) {
+                    console.error('FATAL: Failed to restore inventory!', restoreErr);
+                }
+            }
+
+            if (error.code === 11000) {
+                return res.status(409).json({ message: "Conflict: Room already booked for these new dates." });
+            }
+            throw error;
+        }
     } catch (error) {
-        res.status(500).json({ message: 'Server Error' });
+        console.error('Final Reschedule Error:', {
+            message: error.message,
+            stack: error.stack,
+            id: req.params.id,
+            body: req.body
+        });
+        res.status(500).json({ message: 'Server Error', details: error.message });
     }
 });
 
+// @desc    Admin Approve Booking
 // @route   PUT /api/bookings/:id/approve
-// @desc    2. APPROVAL PHASE: Confirm Booking ONLY (No Payment Capture)
-router.put('/:id/approve', async (req, res) => {
+// @access  Private/Admin
+router.put('/:id/approve', protect, authorize('ADMIN', 'MANAGER'), async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
-        if (!booking) return res.status(404).json({ message: 'Booking not found' });
+        if (!booking) return res.status(404).json({ message: 'Booking not found.' });
 
-        if (booking.status !== 'PENDING_APPROVAL') {
-            return res.status(400).json({ message: `Cannot approve. Current status: ${booking.status}` });
+        // Re-verify inventory still exists and belongs to this booking
+        const inventoryCount = await RoomInventory.countDocuments({ bookingId: booking._id });
+        const nights = getDatesInRange(booking.checkIn, booking.checkOut).length;
+
+        if (inventoryCount < nights) {
+            return res.status(409).json({ message: 'Inventory mismatch. The room might have been reassigned.' });
         }
 
         booking.status = 'CONFIRMED';
         await booking.save();
+        await RoomInventory.updateMany({ bookingId: booking._id }, { status: 'CONFIRMED' });
 
-        await AuditLog.create({
-            user: req.body.adminId || 'Admin',
-            action: 'Booking Approved',
-            details: `Booking ${booking._id} Confirmed. Payment remains Authorized.`
-        });
-
-        // NOTIFICATION: Booking Confirmed
-        try {
-            await Notification.create({
-                user: booking.user,
-                message: `Good news! Your booking for ${booking.roomName} is Confirmed.`,
-                type: 'booking',
-                status: 'PENDING',
-                eventKey: `BOOKING_CONFIRMED:${booking._id}`
-            });
-        } catch (e) { console.log('Notification Error', e.message); }
-
-        res.json({ message: 'Booking Confirmed', booking });
+        res.json({ message: 'Booking confirmed', booking });
     } catch (error) {
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
+// @desc    Reject Booking
 // @route   PUT /api/bookings/:id/reject
-// @desc    Reject Booking & Void Authorization
-router.put('/:id/reject', async (req, res) => {
+// @access  Private/Admin
+router.put('/:id/reject', protect, authorize('ADMIN', 'MANAGER'), async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
-        if (!booking) return res.status(404).json({ message: 'Booking not found' });
-
-        const Payment = (await import('../models/Payment.js')).default;
-        if (booking.payment) {
-            await Payment.findByIdAndUpdate(booking.payment, { status: 'Voided' });
+        if (booking) {
+            booking.status = 'REJECTED';
+            await booking.save();
+            await RoomInventory.deleteMany({ bookingId: booking._id });
         }
-
-        booking.status = 'REJECTED';
-        await booking.save();
-
-        await AuditLog.create({
-            user: req.body.adminId || 'Admin',
-            action: 'Booking Rejected',
-            details: `Booking ${booking._id} Rejected. Payment Voided.`
-        });
-
-        res.json({ message: 'Booking Rejected', booking });
+        res.json({ message: 'Booking rejected' });
     } catch (error) {
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
+// @desc    Check In Guest
 // @route   PUT /api/bookings/:id/checkin
-// @desc    3. CHECK-IN PHASE: Verify & Mark as Checked In
-router.put('/:id/checkin', async (req, res) => {
+// @access  Private/Admin
+router.put('/:id/checkin', protect, authorize('ADMIN', 'MANAGER', 'RECEPTIONIST'), async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
         if (booking.status !== 'CONFIRMED') {
-            return res.status(400).json({ message: `Cannot Check-In. Status must be CONFIRMED. Current: ${booking.status}` });
+            return res.status(400).json({ message: 'Booking must be CONFIRMED first' });
         }
 
         booking.status = 'CHECKED_IN';
-        booking.actualCheckIn = new Date(); // Record actual time
         await booking.save();
+        await RoomInventory.updateMany({ bookingId: booking._id }, { status: 'CHECKED_IN' });
 
-        // UPDATE ROOM STATUS -> OCCUPIED
-        const Room = (await import('../models/Room.js')).default;
-        // Search by roomName (Assuming roomName contains number like "Room 101" or matches number property)
-        // Adjust regex or query based on actual Room Name format
-        const roomNumber = booking.roomName.replace('Room ', '');
-        await Room.findOneAndUpdate({ number: roomNumber }, { status: 'Occupied' });
-
-        await AuditLog.create({
-            user: req.body.staffEmail || 'Staff',
-            action: 'Guest Check-In',
-            details: `Guest Checked In for Room ${booking.roomName}`
-        });
-
-        // NOTIFICATION: Welcome
-        try {
-            await Notification.create({
-                user: booking.user,
-                message: `Welcome to Smart Hotel! You are checked in to ${booking.roomName}.`,
-                type: 'booking',
-                status: 'PENDING',
-                eventKey: `CHECKIN_WELCOME:${booking._id}`
-            });
-        } catch (e) { console.log('Notification Error', e.message); }
-
-        res.json({ message: 'Guest Checked In', booking });
+        res.json(booking);
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
+// @desc    Check Out Guest
+// @route   PUT /api/bookings/:id/checkout
+// @access  Private/Admin
+router.put('/:id/checkout', protect, authorize('ADMIN', 'MANAGER', 'RECEPTIONIST'), async (req, res) => {
+    try {
+        const { paymentMethod, paidAmount } = req.body;
+        const booking = await Booking.findById(req.params.id);
+        if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+        // Input validation to prevent NaN issues
+        const numericPaidAmount = Number(paidAmount);
+        if (isNaN(numericPaidAmount)) {
+            return res.status(400).json({ message: 'Invalid paidAmount. Must be a number.' });
+        }
+
+        // Handle Payment record - ensuring we use the registered model
+        const PaymentModel = mongoose.model('Payment');
+        let payment;
+
+        if (booking.payment) {
+            try {
+                payment = await PaymentModel.findById(booking.payment);
+            } catch (err) {
+                console.warn('Stale payment reference on booking:', booking.payment);
+            }
+        }
+
+        if (!payment) {
+            payment = new PaymentModel({
+                booking: booking._id,
+                amount: booking.totalPrice,
+                status: 'Not Started'
+            });
+        }
+
+        payment.finalAmount = numericPaidAmount;
+        payment.status = 'Captured';
+        payment.paymentMethod = paymentMethod || 'cash';
+        await payment.save();
+
+        booking.status = 'CHECKED_OUT';
+        booking.payment = payment._id;
+        booking.actualCheckOut = new Date();
+        await booking.save();
+
+        await RoomInventory.deleteMany({ bookingId: booking._id });
+
+        res.json({
+            message: 'Checkout successful',
+            booking,
+            receipt: {
+                bookingId: booking._id,
+                amountPaid: numericPaidAmount,
+                date: new Date()
+            }
+        });
+    } catch (error) {
+        console.error('Checkout Error Full Details:', {
+            message: error.message,
+            stack: error.stack,
+            id: req.params.id,
+            user: req.user?._id
+        });
+        res.status(500).json({
+            message: 'Internal Server Error during Checkout',
+            details: error.message,
+            type: error.name
+        });
+    }
+});
+// @desc    Add Service Charge
 // @route   POST /api/bookings/:id/charges
-// @desc    Add extra service charges (Food, Laundry, etc.)
-router.post('/:id/charges', async (req, res) => {
+// @access  Private/Admin
+router.post('/:id/charges', protect, authorize('ADMIN', 'MANAGER', 'RECEPTIONIST'), async (req, res) => {
     try {
         const { description, amount } = req.body;
         const booking = await Booking.findById(req.params.id);
 
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
-        if (booking.status !== 'CHECKED_IN') return res.status(400).json({ message: 'Guest must be CHECKED_IN to add charges.' });
+        if (booking.status === 'CHECKED_OUT' || booking.status === 'CANCELLED') {
+            return res.status(400).json({ message: 'Cannot add charges to closed bookings' });
+        }
 
-        booking.charges.push({ description, amount });
+        booking.charges.push({ description, amount: Number(amount) });
         await booking.save();
 
-        await AuditLog.create({
-            user: req.body.staffEmail || 'Staff',
-            action: 'Add Charge',
-            details: `Added charge: ${description} ($${amount}) for Room ${booking.roomName}`
-        });
-
-        res.json({ message: 'Charge added', charges: booking.charges });
+        res.json(booking);
     } catch (error) {
-        console.error(error);
+        console.error('Add Charge Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
-// @route   PUT /api/bookings/:id/checkout
-// @desc    4. CHECK-OUT PHASE: Generate Final Invoice & Process Payment (Strict Zero Balance)
-router.put('/:id/checkout', async (req, res) => {
+// @desc    Guest Cancel Booking
+// @route   PUT /api/bookings/:id/cancel
+// @access  Private
+router.put('/:id/cancel', protect, async (req, res) => {
     try {
-        const { paymentMethod, paidAmount } = req.body; // e.g., 'cash', 'card_on_file', 'online'
-
-        const booking = await Booking.findById(req.params.id).populate('payment');
+        const booking = await Booking.findById(req.params.id);
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-        if (booking.status !== 'CHECKED_IN') {
-            return res.status(400).json({ message: `Cannot Check-Out. Guest is not CHECKED_IN.` });
+        // Ensure user owns the booking or is admin
+        if (booking.user.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+            return res.status(403).json({ message: 'Not authorized' });
         }
 
-
-        const Payment = (await import('../models/Payment.js')).default;
-        const Invoice = (await import('../models/Invoice.js')).default;
-
-        // 1. Calculate Financials
-        // Real-world: Add extra services here (e.g., Mini-bar, Laundry)
-        const roomTotal = booking.totalPrice;
-        const servicesTotal = booking.charges ? booking.charges.reduce((sum, item) => sum + item.amount, 0) : 0;
-
-        const totalBill = roomTotal + servicesTotal;
-        const advancePaid = booking.payment?.advanceAmount || 0;
-        const payableAmount = totalBill - advancePaid;
-
-        // 2. Validate Payment
-        let amountPayingNow = 0;
-        let finalStatus = 'Pending';
-        let captureAuth = false;
-
-        if (paymentMethod === 'card_on_file') {
-            // Option A: Use the authorized card
-            if (booking.payment?.status !== 'Authorized') {
-                return res.status(400).json({ message: 'No authorized card on file. Please select another payment method.' });
-            }
-            amountPayingNow = payableAmount;
-            captureAuth = true;
-        } else {
-            // Option B: Cash / POS Terminal / Transfer
-            amountPayingNow = Number(paidAmount) || 0;
-        }
-
-        // 3. Balance Check
-        const remainingBalance = payableAmount - amountPayingNow;
-
-        if (remainingBalance > 0) {
-            return res.status(400).json({
-                message: 'Cannot Check-Out. Balance remaining.',
-                financials: { totalBill, advancePaid, payableAmount, paidAmount: amountPayingNow, remainingBalance }
-            });
-        }
-
-        // 4. Process Payment Record
-        if (captureAuth && booking.payment) {
-            // Capture existing Auth
-            await Payment.findByIdAndUpdate(booking.payment._id, {
-                status: 'Captured', // PAID via Card
-                finalAmount: amountPayingNow,
-                method: 'card_on_file'
-            });
-        } else if (booking.payment) {
-            // Update exiting payment record (Switch from Auth to Paid via Cash)
-            await Payment.findByIdAndUpdate(booking.payment._id, {
-                status: 'Captured', // Treated as PAID
-                finalAmount: amountPayingNow,
-                advanceAmount: advancePaid, // Keep record
-                paymentMethod: paymentMethod // 'cash', 'online'
-            });
-        }
-
-        // 5. Generate Final Invoice
-        const finalInvoice = new Invoice({
-            booking: booking._id,
-            type: 'Final',
-            totalAmount: totalBill,
-            items: [
-                { description: `Room Charge (${booking.roomName})`, amount: roomTotal },
-                ...booking.charges.map(c => ({ description: c.description, amount: c.amount })), // Add service items
-                { description: `Less: Advance Payment`, amount: -advancePaid }
-            ]
-        });
-        await finalInvoice.save();
-        booking.invoices.push(finalInvoice._id);
-
-        // 6. Complete Check-Out
-        booking.status = 'CHECKED_OUT';
-        booking.actualCheckOut = new Date();
+        booking.status = 'CANCELLED';
         await booking.save();
 
-        // UPDATE ROOM STATUS -> AVAILABLE
-        const Room = (await import('../models/Room.js')).default;
-        const roomNumber = booking.roomName.replace('Room ', '');
-        await Room.findOneAndUpdate({ number: roomNumber }, { status: 'Available' });
+        // Release inventory
+        await RoomInventory.deleteMany({ bookingId: booking._id });
 
-        await AuditLog.create({
-            user: req.body.staffEmail || 'Staff',
-            action: 'Guest Check-Out',
-            details: `Guest Checked Out. Total: ${totalBill}. Paid: ${amountPayingNow}. Method: ${paymentMethod}.`,
-        });
-
-        // NOTIFICATION: Checkout Thanks + HOUSEKEEPING TASK
-        try {
-            await Notification.create({
-                user: booking.user,
-                message: `Thank you for staying with us. Here is your final invoice.`,
-                type: 'booking',
-                status: 'PENDING',
-                eventKey: `CHECKOUT_THANKS:${booking._id}`
-            });
-
-            // GENERATE CHECKOUT CLEANING TASK
-            // Needs to be assigned to Housekeeping role generally (or left Unassigned for pool)
-            await ServiceRequest.create({
-                user: req.user?._id || booking.user, // System or Admin triggered
-                type: 'Cleaning',
-                details: `Checkout Cleaning for ${booking.roomName}`,
-                priority: 'High',
-                status: 'New',
-                roomNumber: roomNumber
-            });
-        } catch (e) { console.log('System Trigger Error', e.message); }
-
-        res.json({
-            message: 'Check-Out Complete. Payment Verified.',
-            booking,
-            invoice: finalInvoice,
-            receipt: {
-                date: new Date(),
-                method: paymentMethod,
-                amountPaid: amountPayingNow,
-                invoiceNumber: finalInvoice._id
-            }
-        });
-
+        res.json({ message: 'Booking cancelled successfully' });
     } catch (error) {
-        console.error(error);
+        console.error('Cancel Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
-// @route   DELETE /api/bookings/:id
-router.delete('/:id', async (req, res) => {
+// KEEP EXISTING GET/DELETE ROUTES FOR SYSTEM INTEGRITY
+router.get('/', protect, async (req, res) => {
     try {
-        await Booking.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Booking removed' });
+        let query = {};
+
+        // Admin, manager and receptionist can see all bookings
+        // Guests only see their own
+        if (!['ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(req.user.role.toUpperCase())) {
+            query = { user: req.user._id };
+        }
+
+        const bookings = await Booking.find(query)
+            .populate('user', 'name email')
+            .sort({ createdAt: -1 });
+
+        res.json(bookings);
     } catch (error) {
+        console.error('Fetch Bookings Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
+});
+
+router.delete('/:id', protect, authorize('ADMIN'), async (req, res) => {
+    await Booking.findByIdAndDelete(req.params.id);
+    await RoomInventory.deleteMany({ bookingId: req.params.id });
+    res.json({ message: 'Booking deleted' });
 });
 
 export default router;

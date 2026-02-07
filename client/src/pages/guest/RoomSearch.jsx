@@ -13,22 +13,44 @@ const RoomSearch = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('All');
-    // Booking Modal State
+    const [dates, setDates] = useState({ checkIn: '', checkOut: '' });
+
+    // Modal States
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [isBookingOpen, setIsBookingOpen] = useState(false);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
+    // Helper to get tomorrow's date format YYYY-MM-DD
+    const getTomorrow = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
+
     useEffect(() => {
         const fetchRooms = async () => {
+            setLoading(true);
             try {
-                const response = await fetch('http://localhost:5000/api/rooms');
+                // Construct Query Params
+                const params = new URLSearchParams();
+                if (dates.checkIn && dates.checkOut) {
+                    params.append('checkIn', dates.checkIn);
+                    params.append('checkOut', dates.checkOut);
+                }
+                if (filterType !== 'All') params.append('type', filterType);
+                if (urlHotel) params.append('hotel', urlHotel);
+
+                // Simulate fetch delay for realism
+                // await new Promise(r => setTimeout(r, 500)); 
+
+                const response = await fetch(`http://localhost:5000/api/rooms?${params.toString()}`);
                 if (response.ok) {
                     const data = await response.json();
 
-                    // Simulate Multi-Hotel Data if needed (or rely on backend defaults)
+                    // Format Data & Map fake hotel info if missing
                     const formattedRooms = data.map((room, index) => ({
                         id: room._id,
-                        number: room.number, // Ensure number is passed
+                        number: room.number,
                         name: `Room ${room.number}`,
                         type: room.type,
                         price: room.price,
@@ -37,7 +59,6 @@ const RoomSearch = () => {
                         image: room.image || 'https://images.unsplash.com/photo-1590490360182-c33d57733427?ixlib=rb-4.0.3&auto=format&fit=crop&w=1074&q=80',
                         description: room.description,
                         amenities: room.amenities || ['Wifi', 'TV', 'AC'],
-                        // Assign some dummy hotels if not present, for demo purposes
                         hotelName: room.hotelName || (index % 2 === 0 ? 'Central Hotel' : 'Grand Plaza Resort'),
                         address: room.address || (index % 2 === 0 ? '123 Main St, Metropolis' : '456 Ocean Dr, Seaside')
                     }));
@@ -50,16 +71,14 @@ const RoomSearch = () => {
             }
         };
 
-        fetchRooms();
-    }, []);
+        const timeout = setTimeout(fetchRooms, 300); // 300ms debounce
+        return () => clearTimeout(timeout);
+    }, [urlHotel, filterType, dates]);
 
     const filteredRooms = rooms.filter(room => {
-        const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        // Client-side text search (Backend handles dates/types)
+        return room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             room.hotelName.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesType = filterType === 'All' || room.type === filterType;
-        const matchesUrlHotel = !urlHotel || room.hotelName === urlHotel;
-
-        return matchesSearch && matchesType && matchesUrlHotel;
     });
 
     // Group by Hotel
@@ -115,14 +134,26 @@ const RoomSearch = () => {
                         </div>
                     </div>
 
-                    <div className="mt-4 flex gap-4 text-sm text-slate-500">
+                    <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-500">
                         <div className="flex items-center bg-slate-100 px-3 py-1.5 rounded-full">
                             <Calendar className="w-4 h-4 mr-2" />
-                            <span>Check-in — Check-out</span>
+                            <input
+                                type="date"
+                                className="bg-transparent border-none p-0 text-sm focus:ring-0 text-slate-600 w-28"
+                                value={dates.checkIn}
+                                onChange={(e) => setDates({ ...dates, checkIn: e.target.value })}
+                            />
+                            <span className="mx-2">—</span>
+                            <input
+                                type="date"
+                                className="bg-transparent border-none p-0 text-sm focus:ring-0 text-slate-600 w-28"
+                                value={dates.checkOut}
+                                onChange={(e) => setDates({ ...dates, checkOut: e.target.value })}
+                            />
                         </div>
                         <div className="flex items-center bg-slate-100 px-3 py-1.5 rounded-full">
                             <Users className="w-4 h-4 mr-2" />
-                            <span>2 Guests</span>
+                            <span>1-4 Guests</span>
                         </div>
                     </div>
                 </div>

@@ -132,21 +132,28 @@ const Navbar = () => {
                                     )}
                                 </div>
 
-                                <Link
-                                    to={user.role === 'admin' ? '/admin' : user.role === 'staff' ? '/staff' : '/dashboard'}
-                                    className="flex items-center space-x-2 text-slate-700 hover:text-primary-700"
-                                >
-                                    <img src={user.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200" />
-                                    <span className="font-medium">{user.name}</span>
-                                </Link>
+                                <div className="flex flex-col items-end mr-2">
+                                    <Link
+                                        to={
+                                            (user?.role && user.role.toUpperCase() === 'ADMIN') ? '/admin' :
+                                                (user?.role && ['STAFF', 'HOUSEKEEPING', 'MAINTENANCE', 'CLEANER'].includes(user.role.toUpperCase())) ? '/staff' :
+                                                    (user?.role && user.role.toUpperCase() === 'RECEPTIONIST') ? '/receptionist' :
+                                                        '/dashboard'
+                                        }
+                                        className="flex items-center space-x-2 text-slate-700 hover:text-primary-700"
+                                    >
+                                        <img src={user.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200" />
+                                        <span className="font-medium">{user.name}</span>
+                                    </Link>
+                                </div>
 
                                 {/* Admin/Staff Panel Links */}
-                                {user.role === 'admin' && (
+                                {(user?.role && user.role.toUpperCase() === 'ADMIN') && (
                                     <Link to="/admin" className="text-sm font-medium text-slate-500 hover:text-primary-600">
                                         Admin Panel
                                     </Link>
                                 )}
-                                {user.role === 'staff' && (
+                                {(user?.role && ['ADMIN', 'STAFF', 'HOUSEKEEPING', 'MAINTENANCE', 'CLEANER'].includes(user.role.toUpperCase())) && (
                                     <Link to="/staff" className="text-sm font-medium text-slate-500 hover:text-primary-600">
                                         Staff Panel
                                     </Link>

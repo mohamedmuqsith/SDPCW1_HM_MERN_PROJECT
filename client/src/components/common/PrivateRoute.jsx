@@ -9,7 +9,7 @@ const PrivateRoute = ({ children, allowedRoles = [] }) => {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    if (allowedRoles.length > 0 && !allowedRoles.map(r => r.toUpperCase()).includes(user.role.toUpperCase())) {
         // Redirect to appropriate dashboard based on role or unauthorized page
         return <Navigate to="/unauthorized" replace />;
     }

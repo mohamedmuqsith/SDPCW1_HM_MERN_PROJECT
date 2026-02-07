@@ -1,5 +1,6 @@
 import express from 'express';
 import Booking from '../models/Booking.js';
+import ServiceRequest from '../models/ServiceRequest.js';
 
 const router = express.Router();
 
@@ -8,6 +9,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
     try {
         const bookings = await Booking.find();
+        const serviceRequests = await ServiceRequest.find();
 
         // 1. Calculate Total Revenue
         const totalRevenue = bookings.reduce((sum, booking) => sum + (booking.totalPrice || 0), 0);
@@ -15,29 +17,46 @@ router.get('/', async (req, res) => {
         // 2. Calculate Total Bookings
         const totalBookings = bookings.length;
 
-        // 3. Calculate "Occupancy Rate" (Proxy: Confirmed Bookings count)
-        // In a real app, this would be (Occupied Rooms / Total Rooms) * 100
-        const confirmedBookings = bookings.filter(b => b.status === 'Confirmed' || b.status === 'Checked In').length;
-        const occupancyRate = (confirmedBookings / 50) * 100; // Assuming 50 rooms total for demo
+        // 3. Occupancy Rate (Active Bookings)
+        const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'CHECKED_IN').length;
+        const occupancyRate = (confirmedBookings / 50) * 100;
 
-        // 4. Monthly Revenue (Mock breakdown for chart) - In real app, aggregate by createdAt month
-        // We will just distribute the total revenue for demo visualization if not enough data
-        const currentMonth = new Date().getMonth();
-        const monthlyRevenue = [0, 0, 0, 0, 0, 0]; // Last 6 months
+        // 4. Guest Preferences (By Room Type)
+        const roomTypes = {};
+        bookings.forEach(b => {
+            const type = b.roomType || 'Standard';
+            roomTypes[type] = (roomTypes[type] || 0) + 1;
+        });
+        const guestPreferences = {
+            labels: Object.keys(roomTypes),
+            data: Object.values(roomTypes)
+        };
 
-        bookings.forEach(booking => {
-            const date = new Date(booking.createdAt);
-            const monthDiff = currentMonth - date.getMonth();
-            if (monthDiff >= 0 && monthDiff < 6) {
-                monthlyRevenue[5 - monthDiff] += booking.totalPrice || 0;
+        // 5. Service Performance (By Request Type)
+        const requestTypes = {
+            'Room Service': 0,
+            'Transport': 0,
+            'Cleaning': 0
+        };
+        serviceRequests.forEach(sr => {
+            if (requestTypes.hasOwnProperty(sr.type)) {
+                requestTypes[sr.type]++;
+            } else if (sr.type === 'Housekeeping') {
+                requestTypes['Cleaning']++;
             }
         });
+        const servicePerformance = {
+            labels: Object.keys(requestTypes),
+            data: Object.values(requestTypes)
+        };
 
         res.json({
             revenue: totalRevenue,
             bookings: totalBookings,
             occupancy: occupancyRate,
-            confirmed: confirmedBookings
+            confirmed: confirmedBookings,
+            guestPreferences,
+            servicePerformance
         });
     } catch (error) {
         console.error(error);

@@ -10,6 +10,10 @@ const bookingSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    hotelName: {
+        type: String,
+        default: 'Central Hotel'
+    },
     roomType: {
         type: String,
         required: true
@@ -19,8 +23,16 @@ const bookingSchema = new mongoose.Schema({
         required: true
     },
     checkOut: {
-        type: Date, // Planned Check-out
+        type: Date, // Planned Check-out (Date or Time for Events)
         required: true
+    },
+    isEvent: {
+        type: Boolean,
+        default: false // True for Hall bookings (Hourly)
+    },
+    guests: {
+        type: Number,
+        default: 1
     },
     actualCheckIn: {
         type: Date // Set at Check-In time

@@ -19,8 +19,12 @@ const roomSchema = new mongoose.Schema({
         default: '123 Main St, Metropolis'
     },
     category: {
-        type: String, // e.g., 'Luxury', 'Standard', 'Budget' or Hotel Category
+        type: String, // e.g., 'Luxury', 'Standard', 'Budget' or 'Hall'
         default: 'Standard'
+    },
+    capacity: {
+        type: Number,
+        default: 2 // Default for standard rooms
     },
     price: {
         type: Number,

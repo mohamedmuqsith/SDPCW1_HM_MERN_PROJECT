@@ -5,8 +5,8 @@ import AuditLog from '../models/AuditLog.js';
 
 const router = express.Router();
 
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
+const generateToken = (id, role) => {
+    return jwt.sign({ id, role }, process.env.JWT_SECRET, {
         expiresIn: '30d',
     });
 };
@@ -32,7 +32,7 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        let role = 'guest'; // Default role
+        let role = 'GUEST'; // Default role
         const emailLower = email.toLowerCase();
 
         // Check specifically for the demo admin accounts or any email containing "admin"
@@ -43,27 +43,23 @@ router.post('/register', async (req, res) => {
             email === 'admin123@admin.com' ||
             emailLower.includes('admin')
         ) {
-            role = 'admin';
+            role = 'ADMIN';
         }
         // Receptionist role detection
         else if (emailLower.includes('receptionist')) {
-            role = 'receptionist';
+            role = 'RECEPTIONIST';
         }
-        // Cleaner role detection
-        else if (emailLower.includes('cleaner')) {
-            role = 'cleaner';
-        }
-        // Housekeeping role detection
         else if (emailLower.includes('housekeeping')) {
-            role = 'housekeeping';
+            role = 'HOUSEKEEPING';
         }
-        // Maintenance role detection
         else if (emailLower.includes('maintenance')) {
-            role = 'maintenance';
+            role = 'MAINTENANCE';
         }
-        // General staff role (fallback for any "staff" keyword)
         else if (emailLower.includes('staff')) {
-            role = 'staff';
+            role = 'STAFF';
+        }
+        else if (emailLower.includes('cleaner')) {
+            role = 'CLEANER';
         }
 
         const user = await User.create({
@@ -79,7 +75,7 @@ router.post('/register', async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                token: generateToken(user._id),
+                token: generateToken(user._id, user.role),
             });
         } else {
             res.status(400).json({ message: 'Invalid user data' });
@@ -107,13 +103,22 @@ router.post('/login', async (req, res) => {
                 ipAddress: req.ip || '127.0.0.1'
             });
 
+            // Standardize role to uppercase if it's currently lowercase
+            if (user.role === user.role.toLowerCase()) {
+                user.role = user.role.toUpperCase();
+            }
+
+            user.lastLogin = new Date();
+            await user.save();
+
             res.json({
                 _id: user._id,
                 name: user.name,
                 email: user.email,
                 role: user.role,
                 avatar: user.avatar,
-                token: generateToken(user._id),
+                lastLogin: user.lastLogin,
+                token: generateToken(user._id, user.role),
             });
         } else {
             res.status(401).json({ message: 'Invalid email or password' });
@@ -147,13 +152,22 @@ router.post('/google', async (req, res) => {
                 ipAddress: req.ip || '127.0.0.1'
             });
 
+            // Standardize role to uppercase if it's currently lowercase
+            if (user.role === user.role.toLowerCase()) {
+                user.role = user.role.toUpperCase();
+            }
+
+            user.lastLogin = new Date();
+            await user.save();
+
             return res.json({
                 _id: user._id,
                 name: user.name,
                 email: user.email,
                 role: user.role,
                 avatar: user.avatar,
-                token: generateToken(user._id),
+                lastLogin: user.lastLogin,
+                token: generateToken(user._id, user.role),
             });
         }
 
@@ -164,7 +178,7 @@ router.post('/google', async (req, res) => {
             googleId,
             password: '', // No password for google users
             avatar,
-            role: 'guest'
+            role: 'GUEST'
         });
 
         await AuditLog.create({
@@ -180,7 +194,7 @@ router.post('/google', async (req, res) => {
             email: user.email,
             role: user.role,
             avatar: user.avatar,
-            token: generateToken(user._id),
+            token: generateToken(user._id, user.role),
         });
 
     } catch (error) {

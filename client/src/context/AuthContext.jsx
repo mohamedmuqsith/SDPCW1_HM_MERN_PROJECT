@@ -23,7 +23,14 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ email, password }),
             });
 
-            const data = await response.json();
+            const contentType = response.headers.get("content-type");
+            let data;
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                data = await response.json();
+            } else {
+                const text = await response.text();
+                throw new Error(text || 'Login failed');
+            }
 
             if (!response.ok) {
                 throw new Error(data.message || 'Login failed');
@@ -46,7 +53,14 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ name, email, password }),
             });
 
-            const data = await response.json();
+            const contentType = response.headers.get("content-type");
+            let data;
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                data = await response.json();
+            } else {
+                const text = await response.text();
+                throw new Error(text || 'Registration failed');
+            }
 
             if (!response.ok) {
                 throw new Error(data.message || 'Registration failed');
@@ -54,7 +68,6 @@ export const AuthProvider = ({ children }) => {
 
             setUser(data);
             localStorage.setItem('user', JSON.stringify(data));
-            return data;
             return data;
         } catch (error) {
             console.error(error);
@@ -82,7 +95,14 @@ export const AuthProvider = ({ children }) => {
                 }),
             });
 
-            const data = await response.json();
+            const contentType = response.headers.get("content-type");
+            let data;
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                data = await response.json();
+            } else {
+                const text = await response.text();
+                throw new Error(text || 'Google Auth Sync Failed');
+            }
 
             if (!response.ok) {
                 throw new Error(data.message || 'Google Auth Sync Failed');
@@ -106,18 +126,20 @@ export const AuthProvider = ({ children }) => {
 
     // Role-based redirect path helper
     const getRoleRedirectPath = (role) => {
-        switch (role) {
-            case 'admin':
+        if (!role) return '/dashboard';
+        const roleUpper = role.toUpperCase();
+        switch (roleUpper) {
+            case 'ADMIN':
                 return '/admin';
-            case 'receptionist':
+            case 'RECEPTIONIST':
                 return '/receptionist';
-            case 'cleaner':
-            case 'housekeeping': // Redirect to Cleaner Dashboard
+            case 'CLEANER':
+            case 'HOUSEKEEPING': // Redirect to Cleaner Dashboard
                 return '/cleaner';
-            case 'maintenance':
-            case 'staff':
+            case 'MAINTENANCE':
+            case 'STAFF':
                 return '/staff';
-            default: // guest
+            default: // GUEST
                 return '/dashboard';
         }
     };

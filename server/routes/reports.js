@@ -1,13 +1,15 @@
 import express from 'express';
 import Booking from '../models/Booking.js';
-import Room from '../models/Room.js';
 import AuditLog from '../models/AuditLog.js';
+import Room from '../models/Room.js';
+import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// @desc    Get monthly revenue for last 6 months
 // @route   GET /api/reports/revenue
-// @desc    Get revenue analytics (last 6 months)
-router.get('/revenue', async (req, res) => {
+// @access  Private/Admin/Manager
+router.get('/revenue', protect, authorize('admin', 'manager'), async (req, res) => {
     try {
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -16,14 +18,13 @@ router.get('/revenue', async (req, res) => {
             {
                 $match: {
                     createdAt: { $gte: sixMonthsAgo },
-                    status: { $nin: ['Cancelled'] }
+                    status: { $in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] }
                 }
             },
             {
                 $group: {
                     _id: { $month: "$createdAt" },
-                    total: { $sum: "$totalPrice" },
-                    count: { $sum: 1 }
+                    total: { $sum: "$totalPrice" }
                 }
             },
             { $sort: { "_id": 1 } }
@@ -31,60 +32,111 @@ router.get('/revenue', async (req, res) => {
 
         res.json(revenue);
     } catch (error) {
-        console.error(error);
+        console.error('Revenue Report Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
+// @desc    Get current occupancy rate
 // @route   GET /api/reports/occupancy
-// @desc    Get occupancy analytics
-router.get('/occupancy', async (req, res) => {
+// @access  Private/Admin/Manager
+router.get('/occupancy', protect, authorize('admin', 'manager'), async (req, res) => {
     try {
         const totalRooms = await Room.countDocuments();
-        const occupiedRooms = await Booking.countDocuments({
-            status: { $in: ['Checked In', 'Confirmed'] } // Assuming these are active
+
+        // Count bookings that are actively checked in OR confirmed for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const occupiedCount = await Booking.countDocuments({
+            status: { $in: ['CHECKED_IN'] }
         });
 
-        const rate = totalRooms > 0 ? ((occupiedRooms / totalRooms) * 100).toFixed(1) : 0;
+        // Or calculate occupancy based on date ranges overlapping today
+        // Simpler approach for now: 'CHECKED_IN' status
+
+        const rate = totalRooms > 0 ? ((occupiedCount / totalRooms) * 100).toFixed(1) : 0;
 
         res.json({
             rate,
-            occupied: occupiedRooms,
-            total: totalRooms,
-            available: totalRooms - occupiedRooms
+            occupied: occupiedCount,
+            available: totalRooms - occupiedCount,
+            total: totalRooms
         });
     } catch (error) {
-        console.error(error);
+        console.error('Occupancy Report Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
+// @desc    Get recent security audit logs
 // @route   GET /api/reports/logs
-// @desc    Get security audit logs
-router.get('/logs', async (req, res) => {
+// @access  Private/Admin
+router.get('/logs', protect, authorize('admin'), async (req, res) => {
     try {
-        const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(50);
+        const logs = await AuditLog.find()
+            .sort({ timestamp: -1 })
+            .limit(50);
         res.json(logs);
     } catch (error) {
-        console.error(error);
+        console.error('Audit Log Report Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
 
-// @route   POST /api/reports/log
-// @desc    Create a manual log entry (for frontend actions)
-router.post('/log', async (req, res) => {
+// @desc    Get revenue by hotel type with date filter
+// @route   GET /api/reports/hotel-revenue
+// @access  Private/Admin/Manager
+router.get('/hotel-revenue', protect, authorize('admin', 'manager'), async (req, res) => {
     try {
-        const { user, action, details, status } = req.body;
-        await AuditLog.create({
-            user: user || 'Unknown',
-            action,
-            details,
-            status
-        });
-        res.status(201).json({ message: 'Log created' });
+        const { startDate, endDate, hotel } = req.query;
+        let match = {
+            status: { $in: ['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT'] }
+        };
+
+        if (startDate && endDate && startDate !== '' && endDate !== '') {
+            match.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        }
+
+        if (hotel && hotel !== 'all') {
+            match.hotelName = hotel;
+        }
+
+        const report = await Booking.aggregate([
+            { $match: match },
+            {
+                $group: {
+                    _id: {
+                        hotel: "$hotelName",
+                        type: "$roomType"
+                    },
+                    totalRevenue: { $sum: "$totalPrice" },
+                    bookingCount: { $count: {} }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    hotelType: {
+                        $concat: [
+                            { $ifNull: ["$_id.hotel", "Central Hotel"] },
+                            " . ",
+                            { $ifNull: ["$_id.type", "Unknown"] }
+                        ]
+                    },
+                    totalRevenue: 1,
+                    bookingCount: 1
+                }
+            },
+            { $sort: { totalRevenue: -1 } }
+        ]);
+
+        res.json(report);
     } catch (error) {
-        console.error(error);
+        console.error('Hotel Revenue Report Error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });

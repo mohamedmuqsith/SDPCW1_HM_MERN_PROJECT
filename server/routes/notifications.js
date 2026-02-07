@@ -3,6 +3,29 @@ import Notification from '../models/Notification.js';
 
 const router = express.Router();
 
+// --- MOCK GATEWAY FOR SMS/EMAIL ---
+export const sendExternalAlert = async (user, message, type = 'info') => {
+    try {
+        const timestamp = new Date().toISOString();
+        const contact = user.email || user.phone || 'No Contact';
+
+        // Simulate External API Delay
+        // await new Promise(resolve => setTimeout(resolve, 100));
+
+        console.log(`\n[EXTERNAL ALERT GATEWAY]`);
+        console.log(`To: ${user.name} (${contact})`);
+        console.log(`Channel: ${type.toUpperCase() === 'URGENT' ? 'SMS & Email' : 'Email'}`);
+        console.log(`Message: "${message}"`);
+        console.log(`Time: ${timestamp}`);
+        console.log(`[STATUS: SENT]\n`);
+
+        return true;
+    } catch (error) {
+        console.error('[EXTERNAL ALERT FAILED]', error);
+        return false;
+    }
+};
+
 // @route   GET /api/notifications
 // @desc    Get user notifications
 router.get('/', async (req, res) => {

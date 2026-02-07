@@ -279,30 +279,62 @@ const CleanerDashboard = () => {
                 </div>
             </div>
 
+            <div className="flex justify-end mb-6">
+                <button
+                    onClick={async () => {
+                        if (!confirm('Generate daily cleaning schedule for all occupied rooms?')) return;
+                        setActionLoading('generate');
+                        try {
+                            const token = localStorage.getItem('token');
+                            const res = await fetch('http://localhost:5000/api/service-requests/schedule-daily', {
+                                method: 'POST',
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+                            const data = await res.json();
+                            alert(data.message);
+                            fetchTasks();
+                        } catch (e) {
+                            alert('Failed to generate schedule');
+                        } finally {
+                            setActionLoading(null);
+                        }
+                    }}
+                    disabled={actionLoading === 'generate'}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                    {actionLoading === 'generate' ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                    Generate Daily Schedule
+                </button>
+            </div>
+
             {/* Error Banner */}
-            {fetchError && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-                    <div className="flex items-center gap-2 font-medium">
-                        <AlertTriangle size={18} />
-                        <span>Error Loading Tasks</span>
+            {
+                fetchError && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+                        <div className="flex items-center gap-2 font-medium">
+                            <AlertTriangle size={18} />
+                            <span>Error Loading Tasks</span>
+                        </div>
+                        <p className="text-sm mt-1">{fetchError}</p>
+                        <p className="text-xs mt-2 text-red-500">Current role: {user?.role || 'Unknown'} | Required: cleaner, housekeeping, or admin</p>
                     </div>
-                    <p className="text-sm mt-1">{fetchError}</p>
-                    <p className="text-xs mt-2 text-red-500">Current role: {user?.role || 'Unknown'} | Required: cleaner, housekeeping, or admin</p>
-                </div>
-            )}
+                )
+            }
 
             {/* Real-time Notification Toast */}
-            {newNotification && (
-                <div className="fixed top-24 right-6 bg-blue-600 text-white px-6 py-4 rounded-xl shadow-2xl z-50 animate-slide-in flex items-center gap-3">
-                    <div className="bg-white/20 p-2 rounded-full">
-                        <Bell className="w-6 h-6 animate-bounce" />
+            {
+                newNotification && (
+                    <div className="fixed top-24 right-6 bg-blue-600 text-white px-6 py-4 rounded-xl shadow-2xl z-50 animate-slide-in flex items-center gap-3">
+                        <div className="bg-white/20 p-2 rounded-full">
+                            <Bell className="w-6 h-6 animate-bounce" />
+                        </div>
+                        <div>
+                            <p className="font-bold text-lg">New Task Received!</p>
+                            <p className="text-blue-100 text-sm">{newNotification}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="font-bold text-lg">New Task Received!</p>
-                        <p className="text-blue-100 text-sm">{newNotification}</p>
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -514,72 +546,74 @@ const CleanerDashboard = () => {
             </div>
 
             {/* Maintenance Report Modal */}
-            {showReportModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                <AlertTriangle className="text-orange-500" /> Report Issue
-                            </h2>
-                            <button
-                                onClick={() => setShowReportModal(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleReportSubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Room Number</label>
-                                <input
-                                    name="roomNumber"
-                                    required
-                                    placeholder="e.g. 101"
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                                <select
-                                    name="priority"
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            {
+                showReportModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                    <AlertTriangle className="text-orange-500" /> Report Issue
+                                </h2>
+                                <button
+                                    onClick={() => setShowReportModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
                                 >
-                                    <option value="Low">Low</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="High">High</option>
-                                    <option value="Emergency">Emergency</option>
-                                </select>
+                                    ✕
+                                </button>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Issue Details</label>
-                                <textarea
-                                    name="details"
-                                    required
-                                    rows="3"
-                                    placeholder="Describe the maintenance issue..."
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                ></textarea>
-                            </div>
+                            <form onSubmit={handleReportSubmit} className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Room Number</label>
+                                    <input
+                                        name="roomNumber"
+                                        required
+                                        placeholder="e.g. 101"
+                                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
 
-                            <button
-                                type="submit"
-                                disabled={actionLoading === 'report'}
-                                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
-                            >
-                                {actionLoading === 'report' ? (
-                                    <RefreshCw className="animate-spin" size={20} />
-                                ) : (
-                                    <>Submit Report <Play size={16} /></>
-                                )}
-                            </button>
-                        </form>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                    <select
+                                        name="priority"
+                                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="Low">Low</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="High">High</option>
+                                        <option value="Emergency">Emergency</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Issue Details</label>
+                                    <textarea
+                                        name="details"
+                                        required
+                                        rows="3"
+                                        placeholder="Describe the maintenance issue..."
+                                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    ></textarea>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={actionLoading === 'report'}
+                                    className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
+                                >
+                                    {actionLoading === 'report' ? (
+                                        <RefreshCw className="animate-spin" size={20} />
+                                    ) : (
+                                        <>Submit Report <Play size={16} /></>
+                                    )}
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

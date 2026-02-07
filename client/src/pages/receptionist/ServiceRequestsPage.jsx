@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { ClipboardList, User, Clock, CheckCircle, AlertTriangle, UserPlus } from 'lucide-react';
+import { ClipboardList, User, Clock, CheckCircle, AlertTriangle, UserPlus, Plus } from 'lucide-react';
+import CreateRequestModal from '../../components/receptionist/CreateRequestModal';
 
 const ServiceRequestsPage = () => {
     const { token } = useAuth();
@@ -8,6 +9,7 @@ const ServiceRequestsPage = () => {
     const [staff, setStaff] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     const fetchRequests = async () => {
         try {
@@ -49,6 +51,29 @@ const ServiceRequestsPage = () => {
             fetchStaff();
         }
     }, [token, filter]);
+
+    const handleCreateRequest = async (requestData) => {
+        try {
+            const response = await fetch('http://localhost:5000/api/service-requests', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(requestData)
+            });
+            const data = await response.json();
+            if (response.ok) {
+                alert(`✅ Request Created Successfully!`);
+                setIsCreateModalOpen(false);
+                fetchRequests();
+            } else {
+                alert(`✗ ${data.message || data.reason}`);
+            }
+        } catch (error) {
+            alert('Failed to create request');
+        }
+    };
 
     const assignToStaff = async (requestId) => {
         const staffOptions = staff.map(s => `${s.name} (${s.department || s.role})`).join('\n');
@@ -105,12 +130,21 @@ const ServiceRequestsPage = () => {
 
     return (
         <div className="max-w-6xl mx-auto">
-            <header className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 flex items-center">
-                    <ClipboardList className="w-8 h-8 mr-3 text-indigo-600" />
-                    Service Requests
-                </h1>
-                <p className="text-slate-500">View and assign guest service requests to staff</p>
+            <header className="mb-8 flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center">
+                        <ClipboardList className="w-8 h-8 mr-3 text-indigo-600" />
+                        Service Requests
+                    </h1>
+                    <p className="text-slate-500">View and assign guest service requests to staff</p>
+                </div>
+                <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-all"
+                >
+                    <Plus size={20} />
+                    New Request
+                </button>
             </header>
 
             {/* Filters */}
@@ -120,8 +154,8 @@ const ServiceRequestsPage = () => {
                         key={status}
                         onClick={() => setFilter(status)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filter === status
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                     >
                         {status === 'all' ? 'All' : status}
@@ -187,8 +221,15 @@ const ServiceRequestsPage = () => {
                     )}
                 </div>
             </div>
+
+            <CreateRequestModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onCreate={handleCreateRequest}
+            />
         </div>
     );
 };
 
 export default ServiceRequestsPage;
+

@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Loader2, Trash2, CheckCircle, XCircle, Edit2 } from 'lucide-react';
 
+import { useAuth } from '../../context/AuthContext';
+
 const BookingManagement = () => {
+    const { token } = useAuth();
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingBooking, setEditingBooking] = useState(null);
@@ -22,9 +25,12 @@ const BookingManagement = () => {
 
 
     const fetchBookings = async () => {
+        if (!token) return;
         try {
             // For admin, we fetch all bookings
-            const response = await fetch('http://localhost:5000/api/bookings?role=admin');
+            const response = await fetch('http://localhost:5000/api/bookings?role=admin', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (response.ok) {
                 const data = await response.json();
                 setBookings(data);
@@ -38,13 +44,16 @@ const BookingManagement = () => {
 
     useEffect(() => {
         fetchBookings();
-    }, []);
+    }, [token]);
 
     const updateStatus = async (id, newStatus) => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ status: newStatus })
             });
 
@@ -62,7 +71,8 @@ const BookingManagement = () => {
 
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
@@ -77,7 +87,10 @@ const BookingManagement = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${id}/approve`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
             });
 
             if (response.ok) {
@@ -96,7 +109,10 @@ const BookingManagement = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${id}/reject`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
             });
 
             if (response.ok) {
@@ -113,7 +129,10 @@ const BookingManagement = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${id}/checkin`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
             });
 
             if (response.ok) {
@@ -123,6 +142,42 @@ const BookingManagement = () => {
             }
         } catch (error) {
             console.error('Check-in Error:', error);
+        }
+    };
+
+    const handleAddServiceClick = (booking) => {
+        setServiceBooking(booking);
+        setServiceDesc('');
+        setServiceAmount('');
+        setIsServiceModalOpen(true);
+    };
+
+    const submitServiceCharge = async (e) => {
+        e.preventDefault();
+        if (!serviceBooking) return;
+
+        try {
+            const response = await fetch(`http://localhost:5000/api/bookings/${serviceBooking._id}/charges`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    description: serviceDesc,
+                    amount: serviceAmount
+                })
+            });
+
+            if (response.ok) {
+                alert('Charge Added Successfully');
+                setIsServiceModalOpen(false);
+                fetchBookings();
+            } else {
+                alert('Failed to add charge');
+            }
+        } catch (error) {
+            console.error('Add Charge Error:', error);
         }
     };
 
@@ -139,9 +194,13 @@ const BookingManagement = () => {
         if (!checkoutBooking) return;
 
         try {
-            const response = await fetch(`http://localhost:5000/api/bookings/${checkoutBooking._id}/checkout`, {
+            const bookingId = checkoutBooking._id || checkoutBooking.id;
+            const response = await fetch(`http://localhost:5000/api/bookings/${bookingId}/checkout`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     paymentMethod,
                     paidAmount: Number(paidAmount)
@@ -174,7 +233,10 @@ const BookingManagement = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/bookings/${editingBooking._id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(editingBooking)
             });
 

@@ -71,6 +71,22 @@ const BookingModal = ({ room, isOpen, onClose }) => {
             return;
         }
 
+        // Validate Dates
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0); // Normalize today to start of day
+
+        if (checkInDate < todayDate) {
+            setError('Check-in date cannot be in the past.');
+            return;
+        }
+
+        if (checkOutDate <= checkInDate) {
+            setError('Check-out date must be after check-in date.');
+            return;
+        }
+
         if (!payment.cardNumber || !payment.expiry || !payment.cvc || !payment.name) {
             setError('Please complete payment details');
             return;
@@ -106,6 +122,8 @@ const BookingModal = ({ room, isOpen, onClose }) => {
                     onClose();
                     navigate('/dashboard'); // Go to active reservations
                 }, 2000);
+            } else if (res.status === 409) {
+                setError('This room is already reserved for the selected dates. Please try different dates or another room.');
             } else {
                 setError(data.message || 'Booking failed');
             }
@@ -238,8 +256,11 @@ const BookingModal = ({ room, isOpen, onClose }) => {
                             <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
                                 <CheckCircle size={40} />
                             </div>
-                            <h3 className="text-2xl font-bold text-slate-900 mb-2">Booking Pending Approval</h3>
-                            <p className="text-slate-500">Your reservation request was submitted. Waiting for admin confirmation.</p>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-2">Booking Request Sent!</h3>
+                            <p className="text-slate-500">
+                                Your reservation has been <strong>instantly received</strong>.
+                                <br />We will notify you immediately once it is approved.
+                            </p>
                             <p className="text-xs text-slate-400 mt-4">Redirecting to your dashboard...</p>
                         </div>
                     )}

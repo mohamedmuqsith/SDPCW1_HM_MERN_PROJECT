@@ -23,8 +23,8 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['guest', 'receptionist', 'housekeeping', 'maintenance', 'cleaner', 'staff', 'admin'],
-        default: 'guest'
+        enum: ['GUEST', 'RECEPTIONIST', 'HOUSEKEEPING', 'MAINTENANCE', 'CLEANER', 'STAFF', 'ADMIN'],
+        default: 'GUEST'
     },
     department: {
         type: String,
@@ -40,6 +40,9 @@ const userSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    lastLogin: {
+        type: Date
     }
 });
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -27,23 +28,82 @@ ChartJS.register(
 );
 
 const Reports = () => {
+    const { token } = useAuth();
     const [revenueData, setRevenueData] = useState([]);
+    const [hotelRevenueData, setHotelRevenueData] = useState([]);
     const [occupancyData, setOccupancyData] = useState(null);
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [dateFilter, setDateFilter] = useState('all'); // all, today, month, year
+    const [selectedHotel, setSelectedHotel] = useState('all');
+    const [hotels, setHotels] = useState([]);
+
+    const formatLKR = (amount) => {
+        return new Intl.NumberFormat('en-LK', {
+            style: 'currency',
+            currency: 'LKR',
+            minimumFractionDigits: 0
+        }).format(amount);
+    };
+
+    const fetchFilteredHotelRevenue = async (filter, hotel = selectedHotel) => {
+        let start = '';
+        let end = new Date().toISOString();
+
+        if (filter === 'today') {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            start = d.toISOString();
+        } else if (filter === 'month') {
+            const d = new Date();
+            d.setDate(1);
+            d.setHours(0, 0, 0, 0);
+            start = d.toISOString();
+        } else if (filter === 'year') {
+            const d = new Date();
+            d.setMonth(0, 1);
+            d.setHours(0, 0, 0, 0);
+            start = d.toISOString();
+        }
+
+        try {
+            const hotelParam = hotel !== 'all' ? `&hotel=${encodeURIComponent(hotel)}` : '';
+            const url = `http://localhost:5000/api/reports/hotel-revenue?startDate=${start}&endDate=${end}${hotelParam}`;
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setHotelRevenueData(await res.json());
+        } catch (error) {
+            console.error("Error fetching filtered revenue", error);
+        }
+    };
 
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchInitialData = async () => {
             try {
-                const [revRes, occRes, logRes] = await Promise.all([
-                    fetch('http://localhost:5000/api/reports/revenue'),
-                    fetch('http://localhost:5000/api/reports/occupancy'),
-                    fetch('http://localhost:5000/api/reports/logs')
+                const [revRes, occRes, logRes, hotelRes, hotelsRes] = await Promise.all([
+                    fetch('http://localhost:5000/api/reports/revenue', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('http://localhost:5000/api/reports/occupancy', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('http://localhost:5000/api/reports/logs', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('http://localhost:5000/api/reports/hotel-revenue', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('http://localhost:5000/api/hotels', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
                 ]);
 
                 if (revRes.ok) setRevenueData(await revRes.json());
                 if (occRes.ok) setOccupancyData(await occRes.json());
                 if (logRes.ok) setLogs(await logRes.json());
+                if (hotelRes.ok) setHotelRevenueData(await hotelRes.json());
+                if (hotelsRes.ok) setHotels(await hotelsRes.json());
 
             } catch (error) {
                 console.error("Error fetching reports", error);
@@ -51,8 +111,18 @@ const Reports = () => {
                 setLoading(false);
             }
         };
-        fetchData();
-    }, []);
+        fetchInitialData();
+    }, [token]);
+
+    const handleFilterChange = (filter) => {
+        setDateFilter(filter);
+        fetchFilteredHotelRevenue(filter);
+    };
+
+    const handleHotelChange = (hotel) => {
+        setSelectedHotel(hotel);
+        fetchFilteredHotelRevenue(dateFilter, hotel);
+    };
 
     // Chart Configs
     const lineChartData = {
@@ -63,11 +133,29 @@ const Reports = () => {
         }),
         datasets: [
             {
-                label: 'Revenue ($)',
+                label: 'Revenue Trend',
                 data: revenueData.map(d => d.total),
                 borderColor: 'rgb(79, 70, 229)',
                 backgroundColor: 'rgba(79, 70, 229, 0.5)',
                 tension: 0.3
+            }
+        ]
+    };
+
+    const hotelBarData = {
+        labels: hotelRevenueData.map(d => d.hotelType),
+        datasets: [
+            {
+                label: 'Total Revenue (LKR)',
+                data: hotelRevenueData.map(d => d.totalRevenue),
+                backgroundColor: [
+                    'rgba(79, 70, 229, 0.8)',
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(239, 68, 68, 0.8)'
+                ],
+                borderRadius: 8
             }
         ]
     };
@@ -87,11 +175,32 @@ const Reports = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-900">Reports & Analytics</h2>
-                <button className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition">
-                    <Download size={18} /> Export Report (PDF)
-                </button>
+            <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-900">Reports & Analytics</h2>
+                    <p className="text-slate-500 text-sm font-medium">Global and property-specific performance insights</p>
+                </div>
+                <div className="flex gap-4 items-center">
+                    <select
+                        value={selectedHotel}
+                        onChange={(e) => handleHotelChange(e.target.value)}
+                        className="bg-slate-100 border-none rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                    >
+                        <option value="all">All Properties</option>
+                        {hotels.map(h => <option key={h._id} value={h.name}>{h.name}</option>)}
+                    </select>
+                    <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                        {['all', 'today', 'month', 'year'].map((f) => (
+                            <button
+                                key={f}
+                                onClick={() => handleFilterChange(f)}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest transition-all ${dateFilter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                {f.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Top Stats Cards */}
@@ -102,9 +211,9 @@ const Reports = () => {
                             <TrendingUp size={24} />
                         </div>
                         <div>
-                            <p className="text-sm text-slate-500">Total Revenue (6 Mo)</p>
-                            <h3 className="text-2xl font-bold text-slate-900">
-                                ${revenueData.reduce((acc, curr) => acc + curr.total, 0).toLocaleString()}
+                            <p className="text-sm text-slate-500">Total Revenue (Global)</p>
+                            <h3 className="text-xl font-bold text-slate-900">
+                                {formatLKR(hotelRevenueData.reduce((acc, curr) => acc + curr.totalRevenue, 0))}
                             </h3>
                         </div>
                     </div>
@@ -117,7 +226,7 @@ const Reports = () => {
                         </div>
                         <div>
                             <p className="text-sm text-slate-500">Occupancy Rate</p>
-                            <h3 className="text-2xl font-bold text-slate-900">
+                            <h3 className="text-xl font-bold text-slate-900">
                                 {occupancyData?.rate}%
                             </h3>
                         </div>
@@ -130,78 +239,88 @@ const Reports = () => {
                             <ShieldCheck size={24} />
                         </div>
                         <div>
-                            <p className="text-sm text-slate-500">Security Events</p>
-                            <h3 className="text-2xl font-bold text-slate-900">{logs.length}</h3>
+                            <p className="text-sm text-slate-500">Total Bookings</p>
+                            <h3 className="text-xl font-bold text-slate-900">
+                                {hotelRevenueData.reduce((acc, curr) => acc + curr.bookingCount, 0)}
+                            </h3>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4">Revenue Trends</h3>
-                    <div className="h-64">
-                        <Line options={{ responsive: true, maintainAspectRatio: false }} data={lineChartData} />
+            {/* Main Content Area */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Revenue by Hotel Type Bar Chart */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div className="mb-6">
+                        <h3 className="text-lg font-bold text-slate-900">Revenue by Hotel Type</h3>
+                        <p className="text-sm text-slate-500">Distribution across room categories in LKR</p>
+                    </div>
+                    <div className="h-80">
+                        <Bar
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true } }
+                            }}
+                            data={hotelBarData}
+                        />
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4">Occupancy Split</h3>
-                    <div className="h-64 flex justify-center">
-                        <Doughnut options={{ responsive: true, maintainAspectRatio: false }} data={doughnutData} />
+                {/* Revenue Trends */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900 mb-6">Historical Revenue Trend</h3>
+                    <div className="h-80">
+                        <Line options={{ responsive: true, maintainAspectRatio: false }} data={lineChartData} />
                     </div>
                 </div>
             </div>
 
-            {/* Audit Logs Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-100">
-                    <h3 className="text-lg font-bold text-slate-900">Security Audit Log (GDPR Compliance)</h3>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Timestamp</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">User</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Action</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Details</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">IP Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-slate-200">
-                            {logs.map((log) => (
-                                <tr key={log._id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                        {new Date(log.timestamp).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                                        {log.user}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-100 text-slate-800">
-                                            {log.action}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                        {log.details || '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${log.status === 'Success' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                            {log.ipAddress}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {logs.length === 0 && (
+            {/* Details Table */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100">
+                        <h3 className="text-lg font-bold text-slate-900">Revenue Breakdown</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50">
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-8 text-center text-slate-500">No security events recorded yet.</td>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Hotel Type</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Bookings</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Total Revenue</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-slate-100">
+                                {hotelRevenueData.map((d, i) => (
+                                    <tr key={i} className="hover:bg-slate-50 transition">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">{d.hotelType}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{d.bookingCount}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-primary-600">{formatLKR(d.totalRevenue)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900 mb-6">Occupancy Status</h3>
+                    <div className="h-64 flex justify-center">
+                        <Doughnut options={{ responsive: true, maintainAspectRatio: false }} data={doughnutData} />
+                    </div>
+                    <div className="mt-6 space-y-3">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-500">Occupied Rooms</span>
+                            <span className="font-bold text-blue-600">{occupancyData?.occupied}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-500">Available Rooms</span>
+                            <span className="font-bold text-slate-400">{occupancyData?.available}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

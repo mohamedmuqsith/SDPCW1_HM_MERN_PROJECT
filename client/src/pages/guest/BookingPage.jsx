@@ -284,6 +284,22 @@ const BookingPage = () => {
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl mx-auto">
+                {/* Page Header with Session Time */}
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-8 pb-6 border-b border-slate-200 gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-900">Confirm Your Stay</h1>
+                        <p className="text-slate-500 mt-2 text-sm">Review your selection and complete your secure reservation.</p>
+                    </div>
+                    {user?.lastLogin && (
+                        <div className="bg-white border border-slate-100 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm self-start sm:self-auto">
+                            <Clock size={16} className="text-slate-400" />
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">
+                                Session Started: <span className="text-primary-600 ml-1">{new Date(user.lastLogin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </span>
+                        </div>
+                    )}
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* Booking Summary */}
